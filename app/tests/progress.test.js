@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readProfile,saveProfile,awardWin,defaultProfile} from '../src/storage.js';
+test('corrupt or unavailable storage falls back to a fresh profile',()=>{
+  assert.equal(readProfile({getItem:()=>'{bad'}).unlocked,1);
+  assert.equal(readProfile({getItem:()=>{throw Error();}}).unlocked,1);
+  assert.equal(saveProfile(defaultProfile(),{setItem:()=>{throw Error();}}),false);
+});
+test('wins unlock the next level and improved stars reward only the difference',()=>{
+  let p=awardWin(defaultProfile(),1,2);assert.equal(p.unlocked,2);assert.equal(p.coins,60);
+  p=awardWin(p,1,2);assert.equal(p.coins,60);
+  p=awardWin(p,1,3);assert.equal(p.coins,70);assert.equal(p.stars[1],3);
+});

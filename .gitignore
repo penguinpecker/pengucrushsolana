@@ -1,0 +1,43 @@
+# Dependencies, caches and generated output
+node_modules/
+dist/
+build/
+.gradle/
+.DS_Store
+*.log
+coverage/
+reports/
+app/public/legal/
+android-app/app/src/main/assets/www/
+store/site/
+
+# Local machine and publisher configuration
+local.properties
+store/publisher.json
+google-services.json
+GoogleService-Info.plist
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+
+# Credentials and signing material
+*.keystore
+*.jks
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*serviceAccount*.json
+application_default_credentials.json
+credentials.json
+secrets/
+keys/
+
+# Build artifacts and archives
+*.apk
+*.aab
+*.apks
+*.zip

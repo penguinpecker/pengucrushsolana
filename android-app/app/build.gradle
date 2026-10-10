@@ -1,0 +1,80 @@
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+plugins { id 'com.android.application' }
+// google-services.json contains public client configuration, never a service-account key.
+def firebaseFile = file('google-services.json')
+def firebase = firebaseFile.exists() ? new JsonSlurper().parse(firebaseFile) : [:]
+def client = firebase.client?.find { it.client_info?.android_client_info?.package_name == 'com.pengucrush.islands' }
+if (firebaseFile.exists() && !client) throw new GradleException('Firebase config has no com.pengucrush.islands Android client')
+def uploadKey = System.getenv('PENGU_STORE_FILE')
+def storeRelease = project.hasProperty('storeRelease')
+if (storeRelease && (!uploadKey || !firebaseFile.exists())) throw new GradleException('Store release requires the publisher upload key and Firebase Android config. Run app/scripts/check-store.mjs first.')
+android {
+    namespace 'com.pengucrush.islands'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        applicationId 'com.pengucrush.islands'
+        minSdk 26
+        targetSdk 36
+        versionCode 4
+        versionName '0.4.0'
+        buildConfigField 'String', 'FIREBASE_APP_ID', JsonOutput.toJson(client?.client_info?.mobilesdk_app_id ?: '')
+        buildConfigField 'String', 'FIREBASE_API_KEY', JsonOutput.toJson(client?.api_key?.getAt(0)?.current_key ?: '')
+        buildConfigField 'String', 'FIREBASE_PROJECT_ID', JsonOutput.toJson(firebase.project_info?.project_id ?: '')
+        buildConfigField 'String', 'FIREBASE_SENDER_ID', JsonOutput.toJson(firebase.project_info?.project_number ?: '')
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (uploadKey) {
+            upload {
+                storeFile file(uploadKey)
+                storePassword System.getenv('PENGU_STORE_PASSWORD')
+                keyAlias System.getenv('PENGU_KEY_ALIAS')
+                keyPassword System.getenv('PENGU_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // Local installable delivery. Replace this with the owner's store key for publishing.
+            signingConfig uploadKey ? signingConfigs.upload : signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+dependencies {
+    implementation 'androidx.core:core:1.17.0'
+    implementation 'androidx.webkit:webkit:1.14.0'
+    implementation 'androidx.core:core-splashscreen:1.2.0'
+    implementation 'androidx.work:work-runtime:2.11.2'
+    implementation platform('com.google.firebase:firebase-bom:34.19.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    testImplementation 'junit:junit:4.13.2'
+}
+tasks.register('writeRuntimeNotices') {
+    doLast {
+        def rows = configurations.releaseRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.collect { artifact ->
+            def id = artifact.moduleVersion.id
+            def cache = new File(gradle.gradleUserHomeDir, "caches/modules-2/files-2.1/${id.group}/${id.name}/${id.version}")
+            def pom = fileTree(cache).matching { include '**/*.pom' }.files.find()
+            if (!pom) pom = configurations.detachedConfiguration(dependencies.create("${id.group}:${id.name}:${id.version}@pom")).singleFile
+            def licenses = []
+            if (pom) {
+                def xml = new groovy.xml.XmlSlurper(false, false).parse(pom)
+                licenses = xml.licenses.license.collect { [name: it.name.text(), url: it.url.text()] }
+            }
+            def bundled = []
+            zipTree(artifact.file).matching { include '**/LICENSE*', '**/NOTICE*', '**/COPYING*' }.files.each { notice ->
+                if (notice.isFile() && notice.length() < 100000) bundled.add(notice.text)
+            }
+            [name: "${id.group}:${id.name}", version: id.version, licenses: licenses, notices: bundled]
+        }.unique { it.name }.sort { it.name }
+        def target = rootProject.file('../store/native-dependencies.json')
+        target.text = JsonOutput.prettyPrint(JsonOutput.toJson(rows)) + '\n'
+    }
+}
