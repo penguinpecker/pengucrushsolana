@@ -1,0 +1,77 @@
+dappName
+PenguCrush
+
+subtitle
+100 puzzles. Ten islands. One penguin adventure.
+
+description
+Pack light. Crush big. Join Kip, Rook and Juno on a match-3 expedition across ten islands, from snowy Frosthaven to distant shores.
+
+Play 100 handcrafted levels with 111 stages, changing board shapes, icy obstacles, coral, currents, rescue chicks and multi-stage finales. Match pieces, combine specials and use each penguin's companion power to finish your goals. Unleash Polar Blast across a 5×5 area or sweep a whole colour with Aurora Sweep, without spending a move. Try one of each; get more with earned shells or optional SOL packs. Original music and lively effects have separate controls.
+
+Explore the journey map, complete daily quests, collect stars and earn shells and boosters through play. Your expedition is saved on your device, including unfinished levels.
+
+Play all levels for free; individual levels can be played offline. To continue after a completed level, approve a wallet transaction that records the level, score and stars on Solana; your wallet pays the standard network fee. The public on-chain memo includes a run identifier and does not contain personal information. Optionally connect your Seeker wallet to submit a completed score to the public leaderboard for 0.01 SOL plus the network fee, or buy a fixed booster pack. Best submitted scores per level make up your overall total. No ads, subscriptions, token rewards or cash prizes. Optional local reminders and Firebase cloud announcements are controlled in Settings.
+
+Progress is stored locally. Uninstalling the app, clearing its storage or choosing Delete my save removes that progress and unused purchased boosters. Paid supplies belong to the purchasing installation; cross-device restoration is not available. Intended for players aged 13 and older.
+
+languages
+en-US
+
+categorySuggestion
+Games / Puzzle
+
+appWebsite
+https://digitalchocolate.co/pengucrush/
+
+publisherName
+Digital Chocolate
+
+contactEmail
+digitalchocolate@gmail.com
+
+supportEmail
+digitalchocolate@gmail.com
+
+licenseUrl
+https://digitalchocolate.co/pengucrush/legal/terms.html
+
+privacyPolicyUrl
+https://digitalchocolate.co/pengucrush/legal/privacy.html
+
+supportUrl
+https://digitalchocolate.co/pengucrush/legal/support.html
+
+deletionUrl
+https://digitalchocolate.co/pengucrush/legal/deletion.html
+
+tokenDistribution
+false
+
+packageName
+com.pengucrush.islands
+
+versionName
+0.6.1
+
+versionCode
+8
+
+whatsNew
+Record completed levels on Solana with a wallet-approved transaction. This release also includes two powerful boosters, original music, richer sound effects, separate audio controls and the Leaderboard in bottom navigation.
+
+icon
+assets/icon-512.png
+
+banner
+assets/banner-1200x600.png
+
+screenshots
+assets/screenshots/01-camp.png
+assets/screenshots/02-journey.png
+assets/screenshots/03-gameplay.png
+assets/screenshots/04-crew.png
+assets/screenshots/05-score-submit.png
+assets/screenshots/06-leaderboard.png
+assets/screenshots/07-boosters.png
+assets/screenshots/08-notifications.png

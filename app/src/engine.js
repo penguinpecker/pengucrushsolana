@@ -1,4 +1,5 @@
 import { COMPANIONS } from './levels.js';
+import { boosterTargets } from './boosters.js';
 
 const copy = value => structuredClone(value);
 export const adjacent = (a, b, cols = 7) => Math.abs(a % cols - b % cols) + Math.abs(Math.floor(a / cols) - Math.floor(b / cols)) === 1;
@@ -335,10 +336,16 @@ export class Game {
   boost(kind, i = 0) {
     if (this.status!=='playing') return {valid:false,frames:[]};
     if (kind==='hammer' && (!Number.isInteger(i) || i<0 || i>=this.size || (!this.board[i] && !this.coral[i]) || this.board[i]?.type===6)) return {valid:false,frames:[]};
-    if (!['hammer','shuffle','companion'].includes(kind)) return {valid:false,frames:[]};
+    if (!['hammer','shuffle','companion','blast','aurora'].includes(kind)) return {valid:false,frames:[]};
+    const targets=['blast','aurora'].includes(kind)?boosterTargets(kind,i,this,this):null;
+    if(targets&&!targets.length)return {valid:false,frames:[]};
     const frames=[];
     if (kind==='shuffle') { this.reshuffle();frames.push({type:'shuffle',after:this.snapshot()}); }
     else if (kind==='hammer') this.blast([i],[],frames,1,[],false);
+    else if (targets) {
+      this.blast(targets,[],frames,1);
+      frames[0].booster=kind;
+    }
     else {
       const companion=COMPANIONS[this.companion];
       if (this.charge<companion.charge) return {valid:false,frames:[]};

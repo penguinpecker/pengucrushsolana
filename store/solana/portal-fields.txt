@@ -1,0 +1,53 @@
+App Name
+PenguCrush
+
+Package Name
+com.pengucrush.islands
+
+Subtitle
+100 puzzles. Ten islands. One penguin adventure.
+
+Description
+Join Kip, Rook and Juno for a colourful match-3 adventure across 100 free levels and ten islands. Chain combos, rescue chicks and unleash powerful boosters, including Polar Blast and Aurora Sweep. Enjoy offline play, original music and daily quests. Connect your Solana wallet for optional booster packs or submit a completed score to the leaderboard for 0.01 SOL plus the network fee. Progress is saved on your device. No ads, subscriptions, token rewards or cash prizes.
+
+Your Solana Wallet
+Keep the connected publisher wallet shown in the portal (62wE1...wzfdF).
+
+dApp Icon
+assets/icon-512.png (512x512, opaque)
+
+Banner
+assets/banner-1200x600.png (1200x600)
+
+dApp Preview
+Select Portrait. Upload all eight PNGs in assets/screenshots/ (1080x1920; each below 3 MB).
+
+Language
+English (United States) / en-US
+
+Countries to include
+All countries (as currently selected in your portal)
+
+App Website
+https://digitalchocolate.co/pengucrush/
+
+Support Email
+digitalchocolate@gmail.com
+
+Contact Email
+digitalchocolate@gmail.com
+
+Terms of Use
+https://digitalchocolate.co/pengucrush/legal/terms.html
+
+Privacy Policy
+https://digitalchocolate.co/pengucrush/legal/privacy.html
+
+Editor’s Choice — Headline
+Big combos. Bigger penguin adventures.
+
+Editor’s Choice — Tag
+Chill & Play
+
+Editor’s Choice — Graphic
+assets/editors-choice-1200x1200.png (1200x1200)

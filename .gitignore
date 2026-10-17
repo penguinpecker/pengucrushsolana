@@ -35,6 +35,9 @@ application_default_credentials.json
 credentials.json
 secrets/
 keys/
+*.signature
+*.token
+store/solana/upload/
 
 # Build artifacts and archives
 *.apk

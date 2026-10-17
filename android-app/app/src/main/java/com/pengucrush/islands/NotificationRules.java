@@ -5,7 +5,7 @@ import java.util.Set;
 
 /** Pure scheduling and routing rules, shared by reminders and cloud messages. */
 public final class NotificationRules {
-    private static final Set<String> ROUTES = new java.util.HashSet<>(java.util.Arrays.asList("home", "journey", "journal", "friends", "backpack"));
+    private static final Set<String> ROUTES = new java.util.HashSet<>(java.util.Arrays.asList("home", "journey", "journal", "friends", "backpack", "leaderboard"));
     public static String route(String route) { return ROUTES.contains(route == null ? "" : route) ? route : "home"; }
     public static boolean validId(String id) { return id != null && id.matches("[A-Za-z0-9_-]{1,64}"); }
     public static boolean cloudCategory(String value) { return "events".equals(value) || "news".equals(value); }

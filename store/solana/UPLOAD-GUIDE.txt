@@ -1,0 +1,125 @@
+PENGUCRUSH — SOLANA SEEKER / dAPP STORE
+Prepared 17 October 2026
+
+RELEASE
+upload/PenguCrush-Seeker-0.6.1.apk
+Package: com.pengucrush.islands
+Version: 0.6.1 (Android version code 8)
+Minimum Android: API 26. Target: API 36.
+Size: 9078711 bytes
+APK SHA-256: 9bcb0917fec03541ae58651de08bcbfd0de1b2daaa1724c823ce725399390d3d
+
+SIGNING
+Signed with the existing dedicated 3072-bit RSA Seeker release key.
+Certificate SHA-256: ac08f31121913c09c658a3988de01a3337046e12b9f530305184530c38d7e918
+APK v2 signature, certificate match and 16 KB ZIP alignment verified.
+WebView debugging and the debug test receiver are absent from the release.
+Public certificate: signing-certificate.cer. Signature details: upload/APK-SIGNATURE.txt.
+
+Private signing material remains outside this pack, in
+/Users/pp/.config/pengucrushsolana/signing/. Back up that private directory securely.
+Do not upload its .p12 or signing.json. Every update needs the same key and a
+higher version code. Restore that key before building on another workstation.
+
+ONLINE SERVICES
+Railway: https://railway.com/project/f99e792b-0fb1-4497-9a11-bde758ba69a8
+API: https://pengucrush-api-production.up.railway.app
+Database: PostgreSQL on the private Railway network.
+Firebase project: pengucrush-solana
+Cloud messaging is configured, with Android permission and in-app opt-in.
+Native opt-in connected to Firebase successfully on Android. The operator CLI
+validated a cloud message; the publisher-requested test notification (hi / hi) was accepted by FCM for
+game-news subscribers. Device delivery is subject to opt-in and quiet hours.
+
+PAYMENTS — ENABLED ON MAINNET
+Railway SOLANA_TREASURY is configured with the publisher-approved address:
+6zuPtQg1rygxNgzZmjn13YB3bqMGiMLbPAWbrbvwJykg
+The live API reports this exact recipient and paymentsEnabled: true.
+This 0.6.1 APK records completed level activity on Solana using a replay-verified
+Memo transaction, in addition to the 0.6.0 boosters, music and bottom-navigation
+Leaderboard. The wallet pays the normal Solana network fee for each activity
+transaction. Deploy the updated backend endpoint `/v1/activity/transaction`
+before store submission. Payment configuration still refreshes when
+the app opens or resumes; later recipient changes do not require rebuilding. Existing orders retain
+the recipient recorded when they were created.
+Do not put a seed phrase or private key into that variable or into the app.
+Check a real Seeker wallet approval before store submission. No mainnet SOL was
+spent by the automated tests.
+
+GAME AND PAYMENT BEHAVIOUR
+All 100 levels remain free; individual levels can be played offline. Continuing
+after a completed level asks the Seeker wallet to approve the activity Memo
+transaction and network fee. Leaderboard in the bottom navigation opens overall
+and per-level rankings. Each completed level also offers an optional 0.01 SOL
+score submission, plus the network fee.
+Only a wallet's best submitted score per level contributes to its overall total.
+There are no prizes, payouts, subscriptions, token rewards or paid loot boxes.
+
+Fixed packs in Pack:
+3 hammers + 3 shuffles: 0.005 SOL
+10 hammers + 10 shuffles: 0.015 SOL
+25 hammers + 25 shuffles: 0.03 SOL
+2 Polar Blasts + 2 Aurora Sweeps: 0.01 SOL
+6 Polar Blasts + 6 Aurora Sweeps: 0.025 SOL
+
+Polar Blast clears a 5x5 area. Aurora Sweep clears a chosen piece colour across
+the board. Both trigger specials, chip obstacles and use no moves. Select a
+target to preview, then tap Use or Cancel. One of each comes with the update;
+more cost 180/220 earned shells each or the fixed SOL packs above.
+All prices exclude the wallet-displayed network fee. Wallet sign-in itself does
+not transfer SOL. Purchases use native Mobile Wallet Adapter to open the wallet.
+Exact finalized payments are verified by the server before crediting the order.
+Use Pack > Check status to recover an interrupted wallet return.
+Paid consumables stay on the purchasing installation. Deleting a save, clearing
+storage or uninstalling removes unused supplies. Receipt IDs prevent duplicate
+credit on the same installation. There is no cloud save or cross-device restore.
+
+AUDIO
+Original offline music has a gentle camp theme and a faster puzzle rhythm.
+Settings has separate music and effects controls. Both pause in the background.
+
+PUBLIC POLICIES
+Website: https://digitalchocolate.co/pengucrush/
+Privacy: https://digitalchocolate.co/pengucrush/legal/privacy.html
+Terms / license: https://digitalchocolate.co/pengucrush/legal/terms.html
+Support: https://digitalchocolate.co/pengucrush/legal/support.html
+Deletion: https://digitalchocolate.co/pengucrush/legal/deletion.html
+Publisher: Digital Chocolate. Contact: digitalchocolate@gmail.com. Audience: 13+.
+
+UPLOAD CONTENT
+Use listing.json or listing-en-US.txt for portal copy. The pack contains the
+opaque 512x512 icon, 1200x600 banner and eight 1080x1920 Android screenshots.
+The existing banner uses generated artwork; its prompt is in banner-prompt.txt.
+
+VALIDATION
+45 game/JavaScript tests passed; 9 native Android tests passed.
+5 backend tests passed, including real Railway PostgreSQL integration in an
+isolated temporary schema and simulated chain responses. Test data was removed.
+API health and real mainnet RPC connectivity passed. npm backend audit: zero
+known vulnerabilities. Release lint: zero errors and 30 existing warnings.
+The final signed APK completed both powers and the free Level 2 transition on
+an emulator with host graphics. The software renderer initially dropped WebView
+tiles under its memory limit; the same APK rendered correctly with host graphics.
+Device evidence: upload/device-verification.json. A physical Seeker and an
+actual wallet-approved purchase remain untested. No store submission was made.
+
+SUBMIT
+1. Verify the receiving address above and complete a physical Seeker smoke test.
+2. Open https://publish.solanamobile.com and complete the publisher profile and
+   any required identity verification. Confirm audience and distribution regions.
+3. Connect the publisher wallet; fund the selected storage provider as needed.
+4. Create or open the app listing, add the included artwork and screenshots,
+   and use New Version to upload the signed APK (not an Android App Bundle).
+5. Review the store policy and agreements; approve the portal wallet requests.
+   Android signing and the publisher's Solana wallet signatures are separate.
+
+REBUILD
+See README.md and backend/README.md for Firebase config and deployment setup.
+From app/: npm run seeker:build; npm run seeker:check -- --online
+
+OFFICIAL REFERENCES
+https://docs.solanamobile.com/get-started/kotlin/quickstart
+https://docs.solanamobile.com/get-started/kotlin/installation
+https://docs.solanamobile.com/dapp-store/build-and-sign-an-apk
+https://docs.solanamobile.com/dapp-store/submit-new-app
+https://firebase.google.com/docs/cloud-messaging/send/v1-api

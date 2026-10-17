@@ -116,3 +116,29 @@ test('puffer + puffer makes a 5 by 5 blast and puffer + rocket makes broad cross
     assert.equal(frame.cells.length,special==='bomb'?25:36);
   }
 });
+test('Polar Blast clears a clipped 5x5 area, chips obstacles, chains specials and saves moves',()=>{
+  const g=fixture(),moves=g.moves;g.ice[24]=2;g.nets[23]=1;g.coral[25]=2;g.board[25]=null;
+  g.board[16]=g.tile(6);const chick=g.board[16].id;
+  g.board[22]=g.tile(1,'row');
+  const result=g.boost('blast',24),frame=result.frames[0];
+  assert(result.valid);assert.equal(frame.booster,'blast');assert(frame.cells.length>=25);
+  assert.equal(frame.after.ice[24],1);assert.equal(frame.after.nets[23],0);assert.equal(frame.after.coral[25],1);
+  assert.equal(frame.after.board[16].id,chick);assert(frame.cells.includes(21));assert.equal(g.moves,moves);
+  const edge=fixture().boost('blast',0);assert.equal(edge.frames[0].cells.length,9);
+});
+test('Aurora Sweep targets a whole colour, triggers its specials and rejects non-colour targets',()=>{
+  const g=fixture(),moves=g.moves;
+  g.board[4]=g.tile(6);g.board[5]=g.tile(-1,'pearl');
+  for(const i of [4,5,-1,999]){const before=g.snapshot();assert.equal(g.boost('aurora',i).valid,false);assert.deepEqual(g.snapshot(),before);}
+  g.board[1]=g.tile(g.board[0].type,'col');
+  const targets=g.board.flatMap((t,i)=>t.type===g.board[0].type?[i]:[]);
+  const result=g.boost('aurora',0);assert(result.valid);assert.equal(result.frames[0].booster,'aurora');
+  for(const i of targets)assert(result.frames[0].cells.includes(i));
+  assert(result.frames[0].cells.includes(50));assert.equal(g.moves,moves);
+});
+test('power boosters respect holes and remain deterministic after a saved run',()=>{
+  const level=LEVELS.find(l=>l.mask.some(active=>!active)),g=new Game(level),hole=level.mask.indexOf(false);
+  const before=g.snapshot();assert.equal(g.boost('blast',hole).valid,false);assert.deepEqual(g.snapshot(),before);
+  const h=new Game(level,0,g.snapshot()),target=level.mask.indexOf(true);
+  g.boost('blast',target);h.boost('blast',target);assert.deepEqual(g.snapshot(),h.snapshot());
+});

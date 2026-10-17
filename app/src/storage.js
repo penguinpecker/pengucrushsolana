@@ -4,7 +4,7 @@ const mode=new URLSearchParams(globalThis.location?.search||'');
 const KEY=`pengucrush-islands-v1${mode.has('qa')?'-qa':mode.has('review')?'-review':''}`;
 const blankStats=()=>({clears:0,ice:0,coral:0,rescue:0,special:0,net:0,lantern:0,moves:0,currents:0,wins:0});
 export const dayKey=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-export const defaultProfile=()=>({version:2,campaign:3,unlocked:1,stars:{},coins:0,boosters:{hammer:3,shuffle:3},companion:0,sound:true,motion:true,haptics:true,run:null,attempts:{},stats:blankStats(),claims:{},completedRuns:{},relics:[],daily:null});
+export const defaultProfile=()=>({version:2,campaign:3,unlocked:1,stars:{},coins:0,boosters:{hammer:3,shuffle:3,blast:1,aurora:1},companion:0,sound:true,music:true,motion:true,haptics:true,run:null,attempts:{},stats:blankStats(),claims:{},completedRuns:{},relics:[],daily:null});
 export function refreshDaily(profile,today=dayKey()) {
   if(profile.daily?.day===today)return profile;
   return {...profile,daily:{day:today,baseline:{...profile.stats}}};
@@ -22,7 +22,11 @@ export function readProfile(storage=globalThis.localStorage) {
 export function saveProfile(profile,storage=globalThis.localStorage) {
   try {storage.setItem(KEY,JSON.stringify(profile));return true;}catch{return false;}
 }
-export function deleteProfile(storage=globalThis.localStorage) { storage.removeItem(KEY); return refreshDaily(defaultProfile()); }
+export function deleteProfile(storage=globalThis.localStorage) {
+  // Keep receipt IDs so an intentional reset cannot credit a consumed purchase again.
+  const receipts=readProfile(storage).paidReceipts||{};
+  storage.removeItem(KEY);return {...refreshDaily(defaultProfile()),paidReceipts:receipts};
+}
 // Checkpoint the settled rules state before any animation. Delta accounting makes
 // phase changes, app backgrounding and repeated saves safe for quest progress.
 export function checkpointRun(profile,snapshot) {
@@ -38,7 +42,7 @@ export function awardWin(profile,levelId,stars,seed=null) {
   const p=refreshDaily(profile),previous=p.stars[levelId]||0,receipt=`${levelId}:${seed??'first'}`;
   const firstRun=!p.completedRuns[receipt],newRelic=levelId%10===0&&!p.relics.includes(levelId/10-1);
   const reward=(previous===0?40+stars*10:Math.max(0,stars-previous)*10)+(newRelic?100:0);
-  return {...p,unlocked:Math.max(p.unlocked,Math.min(101,levelId+1)),stars:{...p.stars,[levelId]:Math.max(previous,stars)},coins:p.coins+reward,run:null,stats:{...p.stats,wins:p.stats.wins+Number(firstRun)},completedRuns:{...p.completedRuns,[receipt]:true},relics:newRelic?[...p.relics,levelId/10-1]:p.relics,boosters:newRelic?{hammer:p.boosters.hammer+1,shuffle:p.boosters.shuffle+1}:p.boosters};
+  return {...p,unlocked:Math.max(p.unlocked,Math.min(101,levelId+1)),stars:{...p.stars,[levelId]:Math.max(previous,stars)},coins:p.coins+reward,run:null,stats:{...p.stats,wins:p.stats.wins+Number(firstRun)},completedRuns:{...p.completedRuns,[receipt]:true},relics:newRelic?[...p.relics,levelId/10-1]:p.relics,boosters:newRelic?{...p.boosters,hammer:p.boosters.hammer+1,shuffle:p.boosters.shuffle+1}:p.boosters};
 }
 const contracts=[
   ['first-post','First-class delivery','Win your first level.','levels',1,{coins:40}],
@@ -67,7 +71,7 @@ export function quests(profile,today=dayKey()) {
   return [...daily,...contracts.map(([id,title,description,key,target,reward])=>({id,title,description,metric:key,target,reward,group:'expedition',value:metric(p,key),claimed:!!p.claims[id]}))];
 }
 function grant(profile,id,reward) {
-  return {...profile,coins:profile.coins+(reward.coins||0),boosters:{hammer:profile.boosters.hammer+(reward.hammer||0),shuffle:profile.boosters.shuffle+(reward.shuffle||0)},claims:{...profile.claims,[id]:true}};
+  return {...profile,coins:profile.coins+(reward.coins||0),boosters:{...profile.boosters,hammer:profile.boosters.hammer+(reward.hammer||0),shuffle:profile.boosters.shuffle+(reward.shuffle||0)},claims:{...profile.claims,[id]:true}};
 }
 export function claimQuest(profile,id,today=dayKey()) {
   const p=refreshDaily(profile,today),q=quests(p,today).find(q=>q.id===id);

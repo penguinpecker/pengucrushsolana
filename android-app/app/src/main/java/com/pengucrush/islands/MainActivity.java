@@ -1,6 +1,6 @@
 package com.pengucrush.islands;
 
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.ClipData;
@@ -45,8 +45,8 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
 
-/** Bundled game host. Only the native, consent-gated messaging SDK uses the network. */
-public final class MainActivity extends Activity {
+/** Bundled game host with an explicit HTTPS API allowlist and native wallet handoff. */
+public final class MainActivity extends ComponentActivity {
     private static final String ORIGIN = "appassets.androidplatform.net";
     private static final String GAME = "https://" + ORIGIN + "/assets/www/index.html?native=1";
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -57,10 +57,12 @@ public final class MainActivity extends Activity {
     private boolean failed = false;
     private long started;
     private String pendingRoute = "";
+    private WalletBridge wallet;
 
     @Override public void onCreate(Bundle savedState) {
         SplashScreen splash = SplashScreen.installSplashScreen(this);
         super.onCreate(savedState);
+        wallet = new WalletBridge(this, value -> emit("pengu:wallet", value));
         captureRoute(getIntent());
         started = SystemClock.uptimeMillis();
         splash.setKeepOnScreenCondition(() -> !ready && !failed && SystemClock.uptimeMillis() - started < 12000);
@@ -110,7 +112,8 @@ public final class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 WebResourceResponse response = loader.shouldInterceptRequest(request.getUrl());
-                // No resource may silently fall through to a network dependency.
+                Uri url = request.getUrl();
+                if ("https".equals(url.getScheme()) && Uri.parse(BuildConfig.API_ORIGIN).getAuthority().equals(url.getAuthority())) return null;
                 return response != null ? response : new WebResourceResponse("text/plain", "UTF-8", 404, "Not found", null, new ByteArrayInputStream(new byte[0]));
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -137,6 +140,9 @@ public final class MainActivity extends Activity {
     }
 
     public final class GameBridge {
+        @JavascriptInterface public void walletRequest(String id, String action, String json) {
+            handler.post(() -> wallet.request(id, action, json));
+        }
         @JavascriptInterface public String notificationStatus() { return NotificationHub.status(MainActivity.this).toString(); }
         @JavascriptInterface public String launchRoute() { String route=pendingRoute;pendingRoute="";return route; }
         @JavascriptInterface public void notificationPreferences(String json) {
@@ -238,7 +244,7 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         NotificationHub.onForeground(this);
-        if (web != null) { web.resumeTimers(); web.onResume(); immersive(); notifyStatus(); }
+        if (web != null) { web.resumeTimers(); web.onResume(); immersive(); notifyStatus(); emit("pengu:commerce-resume", ""); }
     }
     @Override protected void onStop(){super.onStop();NotificationHub.onBackground(this);}
     private void showError() {
@@ -261,6 +267,7 @@ public final class MainActivity extends Activity {
         errorView = panel; root.addView(panel, new FrameLayout.LayoutParams(-1,-1));
     }
     @Override protected void onDestroy() {
+        if (wallet != null) wallet.close();
         handler.removeCallbacksAndMessages(null);
         if (web != null) { web.removeJavascriptInterface("PenguNative"); web.destroy(); }
         super.onDestroy();

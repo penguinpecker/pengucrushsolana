@@ -1,6 +1,6 @@
 {
   "name": "pengucrushsolana",
-  "version": "0.4.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,13 +10,17 @@
     "test": "node --test tests/*.test.js",
     "android:sync": "node scripts/sync-android.mjs",
     "legal:build": "node scripts/build-legal.mjs",
-    "store:check": "node scripts/check-store.mjs"
+    "store:check": "node scripts/check-store.mjs",
+    "seeker:key": "node scripts/seeker-key.mjs",
+    "seeker:build": "node scripts/seeker-build.mjs",
+    "seeker:check": "node scripts/check-seeker.mjs"
   },
   "dependencies": {
     "@fontsource/lilita-one": "^5.3.0",
     "@fontsource/nunito": "^5.2.7",
     "@fontsource/rubik": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
+    "bs58": "^6.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

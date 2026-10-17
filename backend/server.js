@@ -1,0 +1,15 @@
+import { readFile } from 'node:fs/promises';
+import pg from 'pg';
+import { Connection } from '@solana/web3.js';
+import { createApp } from './api.js';
+if(!process.env.DATABASE_URL)throw Error('DATABASE_URL is required');
+const cluster=process.env.SOLANA_CLUSTER||'mainnet-beta';
+const rpc=process.env.SOLANA_RPC_URL||(cluster==='mainnet-beta'?'https://api.mainnet-beta.solana.com':'https://api.devnet.solana.com');
+const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:10,connectionTimeoutMillis:10000,statement_timeout:20000});
+pool.on('error',error=>console.error('Database connection error',error.code));
+await pool.query(await readFile(new URL('schema.sql',import.meta.url),'utf8'));
+const connection=new Connection(rpc,{commitment:'finalized',disableRetryOnRateLimit:true,fetch:async(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(12000)})});
+const app=createApp({pool,connection,cluster,treasury:process.env.SOLANA_TREASURY||'',allowLocal:process.env.NODE_ENV!=='production'});
+const server=app.listen(Number(process.env.PORT||8080),'0.0.0.0',()=>console.log(`PenguCrush API ready (${cluster}; payments ${process.env.SOLANA_TREASURY?'enabled':'awaiting treasury'})`));
+const cleanup=setInterval(()=>pool.query('DELETE FROM challenges WHERE expires_at<now(); DELETE FROM sessions WHERE expires_at<now()').catch(()=>{}),3600_000);cleanup.unref();
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{clearInterval(cleanup);server.close(()=>pool.end().then(()=>process.exit(0)));});

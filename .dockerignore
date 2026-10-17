@@ -1,0 +1,14 @@
+**/node_modules
+**/.env*
+**/*.p12
+**/*.jks
+**/*.keystore
+**/build
+**/.gradle
+.git
+store
+android-app
+app/public
+app/dist
+*.zip
+*.apk

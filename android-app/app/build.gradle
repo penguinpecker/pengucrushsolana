@@ -5,10 +5,18 @@ plugins { id 'com.android.application' }
 def firebaseFile = file('google-services.json')
 def firebase = firebaseFile.exists() ? new JsonSlurper().parse(firebaseFile) : [:]
 def client = firebase.client?.find { it.client_info?.android_client_info?.package_name == 'com.pengucrush.islands' }
+def network = new JsonSlurper().parse(rootProject.file('../store/network.json'))
+if (!network.apiOrigin.startsWith('https://') || !(network.cluster in ['mainnet-beta','devnet'])) throw new GradleException('Invalid wallet network configuration')
 if (firebaseFile.exists() && !client) throw new GradleException('Firebase config has no com.pengucrush.islands Android client')
 def uploadKey = System.getenv('PENGU_STORE_FILE')
 def storeRelease = project.hasProperty('storeRelease')
-if (storeRelease && (!uploadKey || !firebaseFile.exists())) throw new GradleException('Store release requires the publisher upload key and Firebase Android config. Run app/scripts/check-store.mjs first.')
+def seekerRelease = project.hasProperty('seekerRelease')
+if (storeRelease || seekerRelease) {
+    def missing = ['PENGU_STORE_FILE', 'PENGU_STORE_PASSWORD', 'PENGU_KEY_ALIAS', 'PENGU_KEY_PASSWORD'].findAll { !System.getenv(it) }
+    if (missing) throw new GradleException('Store release requires signing configuration: ' + missing.join(', '))
+    if (!file(uploadKey).isFile()) throw new GradleException('Release keystore does not exist')
+}
+if (storeRelease && !firebaseFile.exists()) throw new GradleException('The connected Play release requires Firebase Android config.')
 android {
     namespace 'com.pengucrush.islands'
     compileSdk 36
@@ -17,8 +25,10 @@ android {
         applicationId 'com.pengucrush.islands'
         minSdk 26
         targetSdk 36
-        versionCode 4
-        versionName '0.4.0'
+        versionCode 8
+        versionName '0.6.1'
+        buildConfigField 'String', 'API_ORIGIN', JsonOutput.toJson(network.apiOrigin)
+        buildConfigField 'String', 'SOLANA_CLUSTER', JsonOutput.toJson(network.cluster)
         buildConfigField 'String', 'FIREBASE_APP_ID', JsonOutput.toJson(client?.client_info?.mobilesdk_app_id ?: '')
         buildConfigField 'String', 'FIREBASE_API_KEY', JsonOutput.toJson(client?.api_key?.getAt(0)?.current_key ?: '')
         buildConfigField 'String', 'FIREBASE_PROJECT_ID', JsonOutput.toJson(firebase.project_info?.project_id ?: '')
@@ -37,8 +47,8 @@ android {
     }
     buildTypes {
         release {
-            // Local installable delivery. Replace this with the owner's store key for publishing.
-            signingConfig uploadKey ? signingConfigs.upload : signingConfigs.debug
+            // A release without credentials stays unsigned. Never publish a debug-signed APK.
+            if (uploadKey) signingConfig signingConfigs.upload
             minifyEnabled false
         }
     }
@@ -48,6 +58,7 @@ android {
     }
 }
 dependencies {
+    implementation 'com.solanamobile:mobile-wallet-adapter-clientlib-ktx:2.0.3'
     implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.webkit:webkit:1.14.0'
     implementation 'androidx.core:core-splashscreen:1.2.0'

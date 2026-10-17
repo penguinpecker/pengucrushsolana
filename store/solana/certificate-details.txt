@@ -1,0 +1,26 @@
+Alias name: pengucrush-seeker
+Creation date: Oct 12, 2026
+Entry type: PrivateKeyEntry
+Certificate chain length: 1
+Certificate[1]:
+Owner: CN=PenguCrush, O=Digital Chocolate
+Issuer: CN=PenguCrush, O=Digital Chocolate
+Serial number: cffab8d9b2feaa23
+Valid from: Mon Oct 12 02:54:29 IST 2026 until: Fri Feb 27 02:54:29 IST 2054
+Certificate fingerprints:
+	 SHA1: 91:92:2E:17:8E:DE:BD:BE:BC:86:01:96:C6:B5:F0:F4:C2:BB:83:BD
+	 SHA256: AC:08:F3:11:21:91:3C:09:C6:58:A3:98:8D:E0:1A:33:37:04:6E:12:B9:F5:30:30:51:84:53:0C:38:D7:E9:18
+Signature algorithm name: SHA256withRSA
+Subject Public Key Algorithm: 3072-bit RSA key
+Version: 3
+
+Extensions: 
+
+#1: ObjectId: 2.5.29.14 Criticality=false
+SubjectKeyIdentifier [
+KeyIdentifier [
+0000: 5B 35 C2 35 A1 13 DA 1C   94 73 27 8F 5F D2 3D 71  [5.5.....s'._.=q
+0010: A8 7C 86 D1                                        ....
+]
+]
+

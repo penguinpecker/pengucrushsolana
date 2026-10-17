@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowLeft, ArrowRight, ArrowClockwise, Backpack, BookOpenText, Compass, FlagPennant, Waves, Check, CaretLeft, CaretRight, Crown, GearSix, Heart, House, Lightbulb, LockKey, MapTrifold, Pause, Play, Snowflake, Sparkle, SpeakerHigh, SpeakerSlash, Star, UsersThree, X } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, ArrowClockwise, Backpack, BookOpenText, Compass, FlagPennant, Waves, Check, CaretLeft, CaretRight, Crown, GearSix, Heart, House, Lightbulb, LockKey, MapTrifold, MusicNotes, Pause, Play, Snowflake, Sparkle, SpeakerHigh, SpeakerSlash, Star, UsersThree, X } from '@phosphor-icons/react';
 import '@fontsource/lilita-one/latin-400.css';
 import '@fontsource/rubik/latin-400.css';
 import '@fontsource/rubik/latin-500.css';
 import '@fontsource/rubik/latin-600.css';
 import '@fontsource/rubik/latin-700.css';
 import { CHAPTERS, COMPANIONS, DIFFICULTIES, LEVELS, PIECES, goalName, activeLevel, ACTS, SHAPES, MECHANICS } from './levels.js';
-import { Game, adjacent } from './engine.js';
+import { adjacent } from './engine.js';
+import { RecordedGame as Game } from './recorded-game.js';
+import { Trophy } from '@phosphor-icons/react';
+import { BoosterShop, Leaderboard, SubmitScore } from './Commerce.jsx';
+import { useCommerce, applyBoosterReceipt } from './commerce.js';
+import { scoreProof } from './recorded-game.js';
 import { awardWin, readProfile, saveProfile, checkpointRun, claimQuest, claimChest, quests, CHESTS, regionStars, deleteProfile, refreshDaily } from './storage.js';
-import { sound } from './audio.js';
+import { sound, configureAudio, installAudioLifecycle } from './audio.js';
+import { BOOSTERS, BOOSTER_KEYS, boosterTargets } from './boosters.js';
+import { BoosterArt } from './BoosterArt.jsx';
 import { Sprite, Character, Stars, Difficulty, IconButton, GoalIcon, MechanicIcon, Landmark, BoardPreview, art, mapArt } from './Art.jsx';
 import CampaignMap from './CampaignMap.jsx';
 import Journal, {RewardContents} from './Journal.jsx';
@@ -20,6 +27,8 @@ import {syncNotificationGame} from './notifications.js';
 import './style.css';
 import './expedition.css';
 import './campaign.css';
+import './commerce.css';
+import './boosters.css';
 
 if(globalThis.PenguNative)document.documentElement.classList.add('native-app');
 
@@ -29,6 +38,12 @@ const review = new URLSearchParams(location.search).has('review');
 function App() {
   const [profile,setProfile]=useState(readProfile);
   const profileRef=useRef(profile);
+  const commerce=useCommerce(order=>{
+    const next=applyBoosterReceipt(profileRef.current,order);
+    if(next===profileRef.current)return;
+    if(!saveProfile(next))throw new Error('Your payment is confirmed, but storage is full. Free some device storage, then check payment status to collect your boosters.');
+    profileRef.current=next;setProfile(next);
+  });
   const [screen,setScreen]=useState('home');
   const mapMemory=useRef(null);
   const [previewPhase,setPreviewPhase]=useState(0);
@@ -47,6 +62,7 @@ function App() {
   const [clearing,setClearing]=useState([]);
   const [hint,setHint]=useState([]);
   const [booster,setBooster]=useState(null);
+  const [aimError,setAimError]=useState('');
   const [message,setMessage]=useState('');
   const [combo,setCombo]=useState('');
   const [invalid,setInvalid]=useState([]);
@@ -66,6 +82,8 @@ function App() {
     profileRef.current=value;setProfile(value);saveProfile(value);
   }
   useEffect(()=>{syncNotificationGame(profile);},[profile]);
+  useEffect(()=>installAudioLifecycle(),[]);
+  useEffect(()=>{configureAudio({music:profile.music,effects:profile.sound,scene:screen==='play'?'play':'camp'});},[profile.music,profile.sound,screen]);
   function openSettingsPage(page){setDialog(null);go(page);}
   function backToSettings(){setScreen('home');location.hash='home';setTimeout(()=>setDialog('settings'),0);}
   function eraseSave(){
@@ -102,6 +120,18 @@ function App() {
     location.hash=`play/${levelId}`;
     sound('special',p.sound);
   }
+  async function continueAfterWin() {
+    if(busyRef.current)return;
+    busyRef.current=true;
+    const completedLevel=engine.current?.root.id;
+    const snapshot=engine.current?.snapshot();
+    let recorded;
+    try {
+      recorded=await commerce.recordActivity(scoreProof(snapshot));
+    } finally {busyRef.current=false;}
+    if(!recorded||engine.current?.root.id!==completedLevel)return;
+    if(completedLevel<100)begin(completedLevel+1);else go('journey');
+  }
 
   useEffect(()=>{
     let live=true,done=0;const started=performance.now();
@@ -119,10 +149,10 @@ function App() {
       if(busyRef.current){location.replace(`#play/${engine.current?.root.id||1}`);return;}
       const [page,id]=location.hash.slice(1).split('/');
       if(page==='play'&&id){if(engine.current?.root.id!==+id)begin(+id,true);else{setScreen('play');const status=engine.current.status;setDialog(['phase','won','lost'].includes(status)?status:null);}}
-      else if(['home','journey','journal','friends','backpack','notifications','privacy','privacy-policy','terms','deletion','support','licenses'].includes(page)){setScreen(page);setDialog(null);}
+      else if(['home','journey','journal','friends','backpack','leaderboard','notifications','privacy','privacy-policy','terms','deletion','support','licenses'].includes(page)){setScreen(page);setDialog(null);}
       else if(!page)setScreen('home');
     };
-    const route=e=>{const target=e.detail;if(['home','journey','journal','friends','backpack'].includes(target)){if(busyRef.current){setTimeout(()=>route(e),300);return;}go(target);}};
+    const route=e=>{const target=e.detail;if(['home','journey','journal','friends','backpack','leaderboard'].includes(target)){if(busyRef.current){setTimeout(()=>route(e),300);return;}go(target);}};
     const launched=globalThis.PenguNative?.launchRoute?.();if(launched)location.hash=launched;
     hash();addEventListener('hashchange',hash);addEventListener('pengu:route',route);
     const fresh=()=>{const next=refreshDaily(profileRef.current);if(next!==profileRef.current)updateProfile(next);};
@@ -149,10 +179,10 @@ function App() {
   },[screen,dialog]);
 
   useEffect(()=>{
-    if(screen!=='play' || busy || dialog || !engine.current || state?.status!=='playing')return;
+    if(screen!=='play' || busy || dialog || booster || !engine.current || state?.status!=='playing')return;
     const timer=setTimeout(()=>setHint(engine.current.legalMoves()[0]||[]),7000);
     return()=>clearTimeout(timer);
-  },[screen,busy,state,dialog]);
+  },[screen,busy,state,dialog,booster]);
 
   useEffect(()=>{
     if(!import.meta.env.DEV)return;
@@ -171,15 +201,16 @@ function App() {
         if(action!==actionRef.current)return;
         if(frame.type==='clear') {
           setState(frame.before);setClearing(frame.cells);
-          if(frame.combo>1)setCombo(frame.combo>=4?'AVALANCHE!':frame.combo===3?'ICE BREAKER!':'NICE CHAIN!');
+          if(frame.booster)setCombo(BOOSTERS[frame.booster].name.toUpperCase()+'!');
+          else if(frame.combo>1)setCombo(frame.combo>=4?'AVALANCHE!':frame.combo===3?'ICE BREAKER!':'NICE CHAIN!');
           else if(frame.fired>1)setCombo('DOUBLE TROUBLE!');
-          sound(frame.fired?'special':'match',profileRef.current.sound,frame.combo);
+          sound(frame.booster|| (frame.fired?'special':'match'),profileRef.current.sound,frame.combo);
           await sleep(reduced?25:210);setClearing([]);setState(frame.after);
         } else {
           setState(frame.after);
           if(frame.type==='current'){setCombo('TIDE TURN!');sound('tap',profileRef.current.sound);}
           if(frame.type==='phase'){setFocusedCell(frame.after.board.findIndex(Boolean));toast(`Next stage. ${frame.carry} moves carried over.`);}
-          if(frame.type==='shuffle')toast('Fresh possibilities! Your board was reshuffled.');
+          if(frame.type==='shuffle'){toast('Fresh possibilities! Your board was reshuffled.');sound('shuffle',profileRef.current.sound);}
           if(frame.type==='rescue'){setCombo('Friend found!');sound('special',profileRef.current.sound);}
           if(frame.type==='gift')toast(`${COMPANIONS[engine.current.companion].name} made you a special!`);
           if(frame.type==='tide')toast('Rook cracked every layer of ice.');
@@ -199,7 +230,7 @@ function App() {
     } finally {busyRef.current=false;setBusy(false);setClearing([]);setCombo('');}
   }
   function swap(a,b) {
-    if(busyRef.current||dialog||!engine.current)return;
+    if(busyRef.current||dialog||!engine.current||booster)return;
     const result=engine.current.swap(a,b);
     if(!result.valid){setInvalid([a,b]);setTimeout(()=>setInvalid([]),350);setSelected(null);toast('Try a swap that makes a match.');sound('invalid',profile.sound);return;}
     if(profileRef.current.haptics)globalThis.PenguNative?.haptic();
@@ -207,6 +238,10 @@ function App() {
   }
   function selectCell(i) {
     if(busyRef.current||dialog||state?.status!=='playing')return;
+    if(BOOSTERS[booster]?.power){
+      if(!boosterTargets(booster,i,engine.current,engine.current).length){setSelected(null);setAimError('Choose a coloured piece, not coral or a chick.');return;}
+      setAimError('');setSelected(i);setHint([]);return;
+    }
     if(booster==='hammer') {
       const result=engine.current.boost('hammer',i);
       if(!result.valid)return toast('Choose a piece or coral. Penguins are for rescuing.');
@@ -233,17 +268,25 @@ function App() {
     if(target>=0&&target<current.mask.length&&adjacent(start.i,target,current.cols))swap(start.i,target);
   }
   function useBooster(kind) {
-    if(busyRef.current)return;
-    if(kind==='hint'){setHint(engine.current.legalMoves()[0]||[]);toast('Look for the two glowing pieces.');return;}
-    if(profile.boosters[kind]<=0){setDialog('supplies');return;}
-    if(kind==='hammer'){setBooster(booster==='hammer'?null:'hammer');setSelected(null);toast(booster==='hammer'?'Hammer put away.':'Tap a piece or coral to break it.');return;}
+    if(busyRef.current||dialog||engine.current?.status!=='playing')return;
+    if(kind==='hint'){setBooster(null);setSelected(null);setHint(engine.current.legalMoves()[0]||[]);toast('Look for the two glowing pieces.');return;}
+    if((profileRef.current.boosters[kind]||0)<=0){setDialog('supplies');return;}
+    if(BOOSTERS[kind]?.targeted){setAimError('');setBooster(booster===kind?null:kind);setSelected(null);setHint([]);if(kind==='hammer')toast(booster===kind?'Hammer put away.':'Tap a piece or coral to break it.');else setMessage('');return;}
     const result=engine.current.boost(kind);
     if(result.valid){updateProfile(p=>({...p,boosters:{...p.boosters,[kind]:p.boosters[kind]-1}}));animate(result);}
   }
   function purchase(kind) {
-    const cost=kind==='hammer'?60:40;
+    const cost=BOOSTERS[kind]?.shells;if(!cost)return;
     if(profileRef.current.coins<cost)return toast('Earn shells by finishing new levels or improving your stars.');
     updateProfile(p=>({...p,coins:p.coins-cost,boosters:{...p.boosters,[kind]:p.boosters[kind]+1}}));toast('Packed and ready.');
+  }
+  function confirmBooster() {
+    if(busyRef.current||dialog||!BOOSTERS[booster]?.power||(profileRef.current.boosters[booster]||0)<1||selected==null)return;
+    const result=engine.current.boost(booster,selected);
+    if(!result.valid)return;
+    updateProfile(p=>({...p,boosters:{...p.boosters,[booster]:p.boosters[booster]-1}}));
+    if(profileRef.current.haptics)globalThis.PenguNative?.haptic();
+    animate(result);
   }
   function openPreview(id) {
     if(!review && id>profile.unlocked)return toast(`Finish level ${id-1} to open this adventure.`);
@@ -254,14 +297,15 @@ function App() {
   function openChest(chapter,tier){setChest({chapter,tier});setDialog('chest');}
   function collectChest(){const result=claimChest(profileRef.current,chest.chapter,chest.tier);if(!result)return;updateProfile(result.profile);setLoot(result);setDialog('reward');sound('win',profileRef.current.sound);}
   function openRelic(id){setRelic(id);setDialog('relic');}
-  const renderNav=()=> <nav className="bottom-nav" aria-label="Main navigation">{[[House,'home','Camp'],[MapTrifold,'journey','Journey'],[BookOpenText,'journal','Journal'],[UsersThree,'friends','Crew'],[Backpack,'backpack','Pack']].map(([Icon,key,label])=><button key={key} className={screen===key?'active':''} aria-current={screen===key?'page':undefined} onClick={()=>go(key)}><Icon size={26} weight={screen===key?'fill':'duotone'}/><span>{label}</span>{key==='journal'&&pendingQuests>0&&<i className="nav-notification">{pendingQuests}</i>}</button>)}</nav>;
-  const renderTop=({title,back=false})=><header className="top-bar">{back?<IconButton label="Back to home" onClick={()=>go('home')}><ArrowLeft weight="bold"/></IconButton>:<div className="small-logo"><Snowflake weight="bold"/>pengucrush</div>}{title&&<strong>{title}</strong>}<div className="top-actions"><div className="currency" title="Shells earned through play"><Sprite index={2}/><b>{profile.coins}</b></div><IconButton label="Settings" onClick={()=>setDialog('settings')}><GearSix weight="fill"/></IconButton></div></header>;
+  const renderNav=()=> <nav className="bottom-nav" aria-label="Main navigation">{[[House,'home','Camp'],[MapTrifold,'journey','Journey'],[Trophy,'leaderboard','Leaderboard'],[BookOpenText,'journal','Journal'],[UsersThree,'friends','Crew'],[Backpack,'backpack','Pack']].map(([Icon,key,label])=><button key={key} className={screen===key?'active':''} aria-current={screen===key?'page':undefined} onClick={()=>go(key)}><Icon size={26} weight={screen===key?'fill':'duotone'}/><span>{label}</span>{key==='journal'&&pendingQuests>0&&<i className="nav-notification">{pendingQuests}</i>}</button>)}</nav>;
+  const renderTop=({title,back=false})=><header className="top-bar">{back?<IconButton label="Back to home" onClick={()=>go('home')}><ArrowLeft weight="bold"/></IconButton>:<div className="small-logo"><Snowflake weight="bold"/>pengucrush</div>}{title&&<strong>{title}</strong>}<div className="top-actions"><div className="currency" title="Shells earned through play"><Sprite index={2}/><b>{profile.coins}</b></div><IconButton label="Leaderboard" onClick={()=>go('leaderboard')}><Trophy weight="duotone"/></IconButton><IconButton label="Settings" onClick={()=>setDialog('settings')}><GearSix weight="fill"/></IconButton></div></header>;
   const renderProgress=({level,snapshot=state})=><div className="goal-list">{level.goals.map((goal,i)=>{
     const value=snapshot?(goal.kind==='collect'?snapshot.counts.collect[goal.piece]:snapshot.counts[goal.kind]):0;
     return <div key={i} className={`goal ${value>=goal.target?'goal-complete':''}`} title={goalName(goal)}><GoalIcon goal={goal}/><span>{value>=goal.target?<Check weight="bold" size={24}/>:<><b>{Math.max(0,goal.target-value)}</b><small>{goal.kind==='special'?'specials':goal.kind==='collect'?PIECES[goal.piece].short:goal.kind==='rescue'?(goal.target-value===1?'chick':'chicks'):goal.kind}</small></>}</span></div>;
   })}</div>;
 
-  const renderSupplies=()=> <div className="supplies-grid">{['hammer','shuffle'].map(kind=><div className="supply" key={kind}>{kind==='hammer'?<Sprite index={11}/>:<span className="shuffle-art"><ArrowClockwise weight="bold"/></span>}<h3>{kind==='hammer'?'Ice hammer':'Snow shuffle'}</h3><p>{kind==='hammer'?'Break a piece or chip the coral.':'Shake up the whole board.'}</p><span className="owned">{profile.boosters[kind]} in your backpack</span><button className="secondary-button" onClick={()=>purchase(kind)}><Sprite index={2}/>{kind==='hammer'?60:40}<span>Get one</span></button></div>)}</div>;
+  const renderSupplies=()=> <div className="supplies-grid">{BOOSTER_KEYS.map(kind=><div className={`supply ${BOOSTERS[kind].power?'power-supply':''}`} key={kind}><BoosterArt kind={kind}/><h3>{BOOSTERS[kind].name}</h3><p>{BOOSTERS[kind].description}</p><span className="owned">{profile.boosters[kind]||0} in your backpack</span><button className="secondary-button" aria-label={`Get one ${BOOSTERS[kind].name} for ${BOOSTERS[kind].shells} shells`} onClick={()=>purchase(kind)}><Sprite index={2}/>{BOOSTERS[kind].shells}<span>Get one</span></button></div>)}</div>;
+  const targetCells=state&&current&&BOOSTERS[booster]?.power?boosterTargets(booster,selected,state,current):[];
 
   return <main className={`app-shell ${reduced?'reduce-motion':''} screen-${screen}`} style={{'--world':`url("${art(current&&screen==='play'?CHAPTERS[current.chapter].art:'frosthaven')}")`}}>
     {!ready&&<LoadingScreen progress={loadProgress} failed={loadFailed} onRetry={()=>setLoadAttempt(n=>n+1)}/>}
@@ -279,23 +323,26 @@ function App() {
     {screen==='journey'&&<section className="journey-view view">{renderTop({title:"The expedition",back:true})}<CampaignMap profile={profile} review={review} onPreview={openPreview} onChest={openChest} onRelic={openRelic} memory={mapMemory} reduced={reduced}/>{renderNav()}</section>}
     {screen==='journal'&&<section className="journal-view view">{renderTop({title:"Your journal",back:true})}<Journal profile={profile} onClaim={collectQuest} onRelic={openRelic}/>{renderNav()}</section>}
 
+    {screen==='leaderboard'&&<section className="leaderboard-view view">{renderTop({title:"Leaderboard",back:true})}<Leaderboard commerce={commerce}/>{renderNav()}</section>}
+
     {screen==='friends'&&<section className="friends-view view">{renderTop({title:"The crew",back:true})}<div className="section-heading"><span className="eyebrow">ODD BIRDS. GOOD COMPANY.</span><h1>Meet the<br/>locals.</h1><p>Three penguins. Three different tricks.<br/>Pick your partner for the next run.</p></div><div className="friends-list">{COMPANIONS.map((friend,i)=>{
       const unlocked=profile.unlocked>=friend.unlock||review, active=profile.companion===i;
       return <article className={`friend-card ${active?'chosen':''} ${unlocked?'':'friend-locked'}`} key={friend.name}><Character index={i}/><div className="friend-copy"><span className="eyebrow">{friend.role}</span><h2>{friend.name}</h2><p>{friend.description}</p><button className={active?'chosen-button':'friend-button'} disabled={!unlocked} onClick={()=>{updateProfile(p=>({...p,companion:i}));toast(`${friend.name} is on your team.`);}}>{!unlocked?<><LockKey weight="fill"/>Level {friend.unlock}</>:active?<><Check weight="bold"/>On your team</>:<>Choose {friend.name}<ArrowRight weight="bold"/></>}</button></div><div className="friend-power"><Sparkle weight="fill"/>{friend.power}<span>{friend.charge} {PIECES[friend.type].short}</span></div></article>;
     })}</div>{renderNav()}</section>}
 
-    {screen==='backpack'&&<section className="backpack-view view">{renderTop({title:"Your backpack",back:true})}<div className="section-heading"><span className="eyebrow">EXPEDITION SUPPLIES</span><h1>Pack a<br/>punch.</h1><p>Spend your hard-earned shells.<br/>Get the tools. Break the ice.</p></div><div className="shell-balance"><Sprite index={2}/><span><b>{profile.coins}</b><small>shells collected</small></span><Sparkle size={30} weight="duotone"/></div>{renderSupplies()}<div className="backpack-note"><Heart weight="duotone"/><p>Stuck? Switch tactics. Retries are always free.</p></div>{renderNav()}</section>}
+    {screen==='backpack'&&<section className="backpack-view view">{renderTop({title:"Your backpack",back:true})}<div className="section-heading"><span className="eyebrow">EXPEDITION SUPPLIES</span><h1>Pack a<br/>punch.</h1><p>Spend your hard-earned shells.<br/>Get the tools. Break the ice.</p></div><div className="pack-shortcuts"><button onClick={()=>document.querySelector('.sol-shop')?.scrollIntoView({block:'start',behavior:reduced?'instant':'smooth'})}>Shop SOL packs<ArrowRight weight="bold"/></button><span>or use earned shells below</span></div><div className="shell-balance"><Sprite index={2}/><span><b>{profile.coins}</b><small>shells collected</small></span><Sparkle size={30} weight="duotone"/></div>{renderSupplies()}<BoosterShop commerce={commerce}/><div className="backpack-note"><Heart weight="duotone"/><p>Stuck? Switch tactics. Retries are always free.</p></div>{renderNav()}</section>}
 
     {screen==='play'&&state&&<section className="game-view view">
       <header className="game-header"><IconButton label="Pause game" disabled={busy} onClick={()=>setDialog('pause')}><Pause weight="fill"/></IconButton><div><span className="eyebrow">{CHAPTERS[current.chapter].name}</span><h1>Level {current.id}</h1></div><IconButton label="How to play" disabled={busy} onClick={()=>setDialog('help')}><Lightbulb weight="duotone"/></IconButton></header>
-      <div className="level-caption"><span>{current.name}</span><Difficulty value={current.difficulty}/></div>
+      <div className="level-caption"><span>{current.name}</span><span className="compact-score" aria-label={`${state.score} points`}><Star weight="fill"/>{state.score.toLocaleString()}</span><Difficulty value={current.difficulty}/></div>
       <div className="game-hud"><div className={`moves-badge ${state.moves<=5?'low':''}`}><b>{state.moves}</b><span>MOVES</span></div><div className="objectives"><span className="eyebrow">YOUR GOALS</span>{renderProgress({level:current})}</div></div>
       {current.phaseCount>1&&<div className="stage-indicator"><span>BEACON FINALE</span>{current.phases.map((phase,i)=><i key={i} className={i<=state.phaseIndex?'reached':''}/>)}<b>Stage {state.phaseIndex+1}/{current.phaseCount}</b></div>}
       {current.current&&<div className="current-ticker"><Waves weight="bold"/><span>Tide moves {current.current.direction===1?'right':'left'} in <b>{current.current.every-state.phaseTurn%current.current.every}</b> {current.current.every-state.phaseTurn%current.current.every===1?'move':'moves'}</span></div>}
-      <GameBoard level={current} state={state} busy={busy} selected={selected} clearing={clearing} hint={hint} invalid={invalid} booster={booster} combo={combo} focusedCell={focusedCell} setFocusedCell={setFocusedCell} selectCell={selectCell} swap={swap} pointerDown={pointerDown} pointerUp={pointerUp} pointerCancel={()=>{pointer.current=null;}} suppressClick={suppressClick}/>
+      <GameBoard level={current} state={state} busy={busy} selected={selected} clearing={clearing} hint={hint} invalid={invalid} booster={booster} targetCells={targetCells} combo={combo} focusedCell={focusedCell} setFocusedCell={setFocusedCell} selectCell={selectCell} swap={swap} pointerDown={pointerDown} pointerUp={pointerUp} pointerCancel={()=>{pointer.current=null;}} suppressClick={suppressClick}/>
       <div className="game-companion"><Character index={state.companion}/><div className="companion-status"><div><strong>{COMPANIONS[state.companion].name}’s {COMPANIONS[state.companion].power.toLowerCase()}</strong><span>{state.charge}/{COMPANIONS[state.companion].charge}</span></div><div className="charge-track"><span style={{width:`${state.charge/COMPANIONS[state.companion].charge*100}%`}}/></div><small>Match {PIECES[COMPANIONS[state.companion].type].short} to charge your power</small></div><button className="companion-power" aria-label={`Use ${COMPANIONS[state.companion].name}'s power`} disabled={busy||state.charge<COMPANIONS[state.companion].charge} onClick={()=>animate(engine.current.boost('companion'))}><Sparkle weight="fill"/></button></div>
-      <div className="game-tools"><button disabled={busy} className={booster==='hammer'?'tool active':'tool'} onClick={()=>useBooster('hammer')}><Sprite index={11}/><b>{profile.boosters.hammer}</b><span>Hammer</span></button><button disabled={busy} className="tool" onClick={()=>useBooster('shuffle')}><span className="shuffle-art"><ArrowClockwise weight="bold"/></span><b>{profile.boosters.shuffle}</b><span>Shuffle</span></button><button disabled={busy} className="tool" onClick={()=>useBooster('hint')}><span className="hint-art"><Lightbulb weight="fill"/></span><small>FREE</small><span>Hint</span></button><div className="score-readout"><Star weight="fill"/><strong>{state.score.toLocaleString()}</strong><small>SCORE</small></div></div>
-      <p className="game-tip">{booster==='hammer'?'Tap a piece to use your hammer.':current.lesson}</p>
+      {BOOSTERS[booster]?.power&&<div className="booster-aim" role="region" aria-label={`${BOOSTERS[booster].name} preview`}><div aria-live="polite"><b>{BOOSTERS[booster].name}</b><small role={aimError?'alert':undefined}>{aimError||(targetCells.length?`${targetCells.length} spaces targeted · chains can reach farther`:'Tap a target on the board · no move used')}</small></div><button aria-label={`Use ${BOOSTERS[booster].name}`} disabled={busy||!targetCells.length} onClick={confirmBooster}>Use</button><button className="aim-cancel" aria-label="Cancel booster" onClick={()=>{setBooster(null);setSelected(null);}}><X/></button></div>}
+      <div className="game-tools expanded-tools">{BOOSTER_KEYS.map(kind=><button key={kind} disabled={busy} aria-label={`${BOOSTERS[kind].name}, ${profile.boosters[kind]||0} available`} aria-pressed={booster===kind} className={booster===kind?'tool active':'tool'} onClick={()=>useBooster(kind)}><BoosterArt kind={kind}/><b>{profile.boosters[kind]||0}</b><span>{BOOSTERS[kind].short}</span></button>)}<button disabled={busy} className="tool" onClick={()=>useBooster('hint')}><span className="hint-art"><Lightbulb weight="fill"/></span><small>FREE</small><span>Hint</span></button></div>
+      <p className="game-tip">{booster==='hammer'?'Tap a piece to use your hammer.':BOOSTERS[booster]?.power?'Preview your target, then tap Use. No moves spent.':current.lesson}</p>
     </section>}
 
     {dialog&&<Modal title={dialog==='phase'?'KEEP THE LIGHT MOVING':dialog==='reward'?'A LITTLE TREASURE!':dialog==='chest'?'STAR CHEST':dialog==='relic'?'FROM THE FIELD NOTES':dialog==='preview'?`Level ${preview?.id}`:dialog==='won'?'CRUSHED IT!':dialog==='lost'?'SO CLOSE.':dialog==='pause'?'ON A BREAK':dialog==='settings'?'SETTINGS':dialog==='supplies'?'GEAR UP':'THE BASICS'} onClose={()=>{if(['won','lost','phase'].includes(dialog))go('journey');else setDialog(null);}}>
@@ -304,12 +351,12 @@ function App() {
       {dialog==='reward'&&loot&&<><Landmark index={11} className="reward-chest-art"/><span className="eyebrow">WELL EARNED. WELL PACKED.</span><h3>{loot.title}</h3><RewardContents reward={loot.reward}/><button className="primary-button" onClick={()=>setDialog(null)}>Into the backpack<Check weight="bold"/></button></>}
       {dialog==='chest'&&chest&&<><Landmark index={11} className="reward-chest-art"/><h3>{CHAPTERS[chest.chapter].name}</h3><p className="lesson">Collect {CHESTS[chest.tier].target} stars on this island to open this chest. Replay levels to improve your stars.</p><div className="chest-star-count"><Star weight="fill"/><b>{regionStars(profile,chest.chapter)}</b> / {CHESTS[chest.tier].target}</div><RewardContents reward={CHESTS[chest.tier].reward}/><button className="primary-button" disabled={!!profile.claims[`chest:${chest.chapter}:${chest.tier}`]||regionStars(profile,chest.chapter)<CHESTS[chest.tier].target} onClick={collectChest}>{profile.claims[`chest:${chest.chapter}:${chest.tier}`]?'Already collected':regionStars(profile,chest.chapter)>=CHESTS[chest.tier].target?'Open the chest':'Keep collecting stars'}<Star weight="fill"/></button></>}
       {dialog==='relic'&&<><Landmark index={relic} className="relic-detail-art"/><span className="eyebrow">{profile.relics.includes(relic)?'BEACON RESTORED':`ACT ${CHAPTERS[relic].act+1} · ${ACTS[CHAPTERS[relic].act]}`}</span><h3>{CHAPTERS[relic].relic}</h3><p className="lesson">{CHAPTERS[relic].story}</p><div className="relic-requirement"><FlagPennant weight="fill"/>{profile.relics.includes(relic)?'Safely tucked in your field journal.':`Complete the level ${CHAPTERS[relic].end} finale.`}</div><button className="primary-button" onClick={()=>setDialog(null)}>{profile.relics.includes(relic)?'One light closer to home':'Adventure awaits'}<ArrowRight weight="bold"/></button></>}
-      {dialog==='won'&&<><div className="celebration-sparks" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i} style={{'--i':i}}/>)}</div><Character index={state.companion} className="modal-mascot result-mascot"/><Stars count={engine.current.stars()} size={54}/><p className="result-copy">{current.id===100?'Ten lights in the sky. Everyone made it home.':`${current.name} cleared.`}</p><div className="result-stats"><div><b>{state.score.toLocaleString()}</b><span>points</span></div><div><b>{state.moves}</b><span>moves saved</span></div><div><b>+{reward}</b><span>shells</span></div></div>{current.relic&&<div className="won-relic"><Landmark index={current.chapter}/><span><small>BEACON RESTORED</small><b>{current.relic}</b><em>{reward>=100?'+100 shells · 1 hammer · 1 shuffle':'A light on the way home.'}</em></span></div>}{[10,20].includes(current.id)&&<p className="friend-unlock"><Sparkle weight="fill"/>{COMPANIONS[current.id/10].name} is ready to join your crew!</p>}<button className="primary-button" onClick={()=>current.id<100?begin(current.id+1):go('journey')}>{current.id<100?'Next adventure':'Explore your journey'}<ArrowRight weight="bold"/></button><button className="text-button" onClick={()=>go('journey')}>Back to the islands</button></>}
+    {dialog==='won'&&<><div className="celebration-sparks" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i} style={{'--i':i}}/>)}</div><Character index={state.companion} className="modal-mascot result-mascot"/><Stars count={engine.current.stars()} size={54}/><p className="result-copy">{current.id===100?'Ten lights in the sky. Everyone made it home.':`${current.name} cleared.`}</p><div className="result-stats"><div><b>{state.score.toLocaleString()}</b><span>points</span></div><div><b>{state.moves}</b><span>moves saved</span></div><div><b>+{reward}</b><span>shells</span></div></div>{current.relic&&<div className="won-relic"><Landmark index={current.chapter}/><span><small>BEACON RESTORED</small><b>{current.relic}</b><em>{reward>=100?'+100 shells · 1 hammer · 1 shuffle':'A light on the way home.'}</em></span></div>}{[10,20].includes(current.id)&&<p className="friend-unlock"><Sparkle weight="fill"/>{COMPANIONS[current.id/10].name} is ready to join your crew!</p>}<button className="primary-button" disabled={commerce.busy} onClick={continueAfterWin}>{commerce.busy?'Recording on Solana…':current.id<100?'Next adventure':'Explore your journey'}<ArrowRight weight="bold"/></button>{commerce.error&&<p className="commerce-error" role="alert">{commerce.error}</p>}{commerce.notice&&<p className="commerce-status" role="status">{commerce.notice}</p>}<p className="result-copy">Continue to record this level on Solana. Your wallet pays the network fee.</p><SubmitScore snapshot={engine.current.snapshot()} commerce={commerce} onLeaderboard={()=>go('leaderboard')}/><button className="text-button" disabled={commerce.busy} onClick={()=>go('journey')}>Back to the islands</button></>}
       {dialog==='lost'&&<><Character index={state.companion} className="modal-mascot result-mascot"/><p className="result-copy">New board. New plan.<br/>You know what to do.</p>{renderProgress({level:current})}<button className="primary-button" onClick={()=>begin(current.id)}><ArrowClockwise weight="bold"/>Try again · free</button><button className="text-button" onClick={()=>go('journey')}>Back to the islands</button></>}
       {dialog==='pause'&&<><Character index={state.companion} className="modal-mascot"/><p className="result-copy">Your board is saved.</p><button className="primary-button" onClick={()=>setDialog(null)}><Play weight="fill"/>Keep playing</button><button className="secondary-button" onClick={()=>begin(current.id)}><ArrowClockwise/>Start a fresh board</button><button className="secondary-button" onClick={()=>setDialog('settings')}><GearSix/>Options</button><button className="text-button" onClick={()=>go('journey')}>Save & return to the islands</button></>}
-      {dialog==='settings'&&<><p className="lesson">Set things your way.</p><div className="settings-list"><button role="switch" aria-checked={profile.sound} onClick={()=>updateProfile(p=>({...p,sound:!p.sound}))}>{profile.sound?<SpeakerHigh weight="duotone"/>:<SpeakerSlash weight="duotone"/>}<span>Playful sounds</span><span className={`toggle ${profile.sound?'on':''}`}/></button><button role="switch" aria-checked={profile.motion} onClick={()=>updateProfile(p=>({...p,motion:!p.motion}))}><Sparkle weight="duotone"/><span>Animations</span><span className={`toggle ${profile.motion?'on':''}`}/></button>{globalThis.PenguNative&&<button role="switch" aria-checked={profile.haptics} onClick={()=>{updateProfile(p=>({...p,haptics:!p.haptics}));if(!profile.haptics)globalThis.PenguNative.haptic();}}><Heart weight="duotone"/><span>Haptic feedback</span><span className={`toggle ${profile.haptics?'on':''}`}/></button>}</div><button className="secondary-button" onClick={()=>setDialog('help')}><Lightbulb/>How to play</button><SettingsLinks onOpen={openSettingsPage}/><p className="settings-footnote">Your progress stays on this device.<br/>100 levels. Ten islands. One odd crew.</p></>}
+      {dialog==='settings'&&<><p className="lesson">Set things your way.</p><div className="settings-list"><button role="switch" aria-checked={profile.sound} onClick={()=>updateProfile(p=>({...p,sound:!p.sound}))}>{profile.sound?<SpeakerHigh weight="duotone"/>:<SpeakerSlash weight="duotone"/>}<span>Sound effects</span><span className={`toggle ${profile.sound?'on':''}`}/></button><button role="switch" aria-checked={profile.music} onClick={()=>updateProfile(p=>({...p,music:!p.music}))}><MusicNotes weight="duotone"/><span>Background music</span><span className={`toggle ${profile.music?'on':''}`}/></button><button role="switch" aria-checked={profile.motion} onClick={()=>updateProfile(p=>({...p,motion:!p.motion}))}><Sparkle weight="duotone"/><span>Animations</span><span className={`toggle ${profile.motion?'on':''}`}/></button>{globalThis.PenguNative&&<button role="switch" aria-checked={profile.haptics} onClick={()=>{updateProfile(p=>({...p,haptics:!p.haptics}));if(!profile.haptics)globalThis.PenguNative.haptic();}}><Heart weight="duotone"/><span>Haptic feedback</span><span className={`toggle ${profile.haptics?'on':''}`}/></button>}</div><button className="secondary-button" onClick={()=>setDialog('help')}><Lightbulb/>How to play</button><SettingsLinks onOpen={openSettingsPage}/><p className="settings-footnote">Your progress stays on this device.<br/>100 levels. Ten islands. One odd crew.</p></>}
       {dialog==='help'&&<div className="help-list"><p>Swipe a piece into a neighbor, or tap one and then the other. Match 3 or more to clear them.</p>{[[6,'Match 4','A rocket clears a row or column.'],[7,'Make a T or L','A puffer clears a 3 × 3 area.'],[8,'Match 5 in a line','Swap the pearl with a color to clear that color.'],[9,'Break the ice','Match on icy squares. Thick ice takes two hits.'],[10,'Clear the coral','Match next to coral, or hit it with a special.']].map(([index,title,body])=><div key={index}><Sprite index={index}/><span><b>{title}</b><small>{body}</small></span></div>)}<p>Combine two specials for a bigger burst. Tap a special twice to activate it. Rescue chicks by bringing them to the marked exits.</p>{MECHANICS.filter(m=>['lantern','net','current'].includes(m.id)).map(m=><div key={m.id}><MechanicIcon kind={m.id}/><span><b>{m.id==='lantern'?'Light the lanterns':m.id==='net'?'Cut the nets':'Ride the current'}</b><small>{m.description}</small></span></div>)}<p>Gaps split the board into separate falling lanes. Beacon finales have 2 stages; level 100 has 3. Save up to 5 moves for your next stage.</p><p className="keyboard-note">Keyboard: arrow keys move focus; Enter selects. Shift + arrow swaps.</p></div>}
-      {dialog==='supplies'&&<><p className="lesson">Spend the shells you’ve earned on your adventure.</p>{renderSupplies()}</>}
+      {dialog==='supplies'&&<><p className="lesson">Every booster saves your moves. Spend earned shells, or choose a SOL pack.</p>{renderSupplies()}<BoosterShop commerce={commerce}/></>}
     </Modal>}
     <div className={`toast ${message?'visible':''}`} role="status" aria-live="polite">{message}</div>
     <span className="sr-only" aria-live="polite">{busy?'Matching pieces':state&&screen==='play'?`${state.moves} moves remaining`:''}</span>

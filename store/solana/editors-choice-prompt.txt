@@ -1,0 +1,11 @@
+Generated using the built-in image_gen tool.
+
+Use case: ads-marketing
+Asset type: square 1200x1200 Editor's Choice promotional illustration for PenguCrush's Solana mobile game store listing.
+Input images: Image 1 is the existing wide store banner, used as the brand and environment reference. Image 2 is the existing app icon, used as the exact Kip character reference.
+Primary request: Create a new square composition from this existing game identity. Match the friendly navy penguin Kip with cream belly, orange beak and feet, orange red floppy expedition hat with a cream patch. Preserve his character design and the established illustrated snowy harbor world. This is a promotional artwork, not a phone mockup or screenshot.
+Scene: bright frozen turquoise harbor, angular pale blue icebergs, snowy mountains, a small orange harbor cabin and striped windsock in the background. Kip waves happily from a foreground ice floe; a few small pink shell, turquoise fish and gold star puzzle pieces suggest the match-three game.
+Style: crisp polished hand-painted 2D game illustration, bold navy contours, broad clean shapes, cream and ice blue light with warm orange accents, matching both reference images.
+Composition: true square, visually strong at small carousel size. Upper third holds the legible game title, centre and lower portion feature the full penguin and beautiful icy harbor. Generous safe margins; no cropped letters or cropped character. Fill the entire square with opaque artwork, no frame.
+Text (verbatim): "PENGUCRUSH" and below it "BEYOND THE HORIZON". Use bold playful navy display lettering with a little snow on the main title, as in the reference banner. No other text.
+Constraints: exact 1200x1200 pixels if supported; opaque background; no watermark; no app-store badges, no Editor's Choice badge, no Solana logo, no coins, no wallet symbols, no UI buttons. Preserve the visual identity faithfully.

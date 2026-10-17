@@ -1,0 +1,12 @@
+{
+  "appName": "PenguCrush",
+  "publisherName": "Digital Chocolate",
+  "supportEmail": "digitalchocolate@gmail.com",
+  "privacyEmail": "digitalchocolate@gmail.com",
+  "website": "https://digitalchocolate.co/pengucrush.html",
+  "policyBaseUrl": "https://digitalchocolate.co/pengucrush/legal",
+  "audience": "13+",
+  "effectiveDate": "2026-10-17",
+  "policyVersion": "1.3",
+  "cloudMessaging": true
+}

@@ -75,3 +75,9 @@ test('beacon reward and win receipt are paid once and the final level caps unloc
  p=awardWin(p,100,2,77);assert.equal(p.coins,before.coins);assert.equal(p.stats.wins,before.stats.wins);
  p=awardWin(p,100,3,78);assert.equal(p.coins,170);assert.equal(p.stats.wins,2);
 });
+test('beacon, chest and quest rewards preserve new power inventory',()=>{
+ const p={...defaultProfile(),unlocked:10,boosters:{hammer:3,shuffle:3,blast:7,aurora:8},stars:{1:3,2:3,3:2}};
+ assert.equal(awardWin(p,10,3,77).boosters.blast,7);
+ assert.equal(claimChest(p,0,0).profile.boosters.aurora,8);
+ assert.equal(claimQuest(p,'first-post').profile.boosters.blast,7);
+});

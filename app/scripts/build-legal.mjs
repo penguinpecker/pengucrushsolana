@@ -10,9 +10,10 @@ const frame=(title,body)=>`<!doctype html><html lang="en"><meta charset="utf-8">
 await writeFile(new URL('policy.css',out),`*{box-sizing:border-box}body{background:#fff2cf;color:#172d3e;margin:0;font:16px/1.8 system-ui,sans-serif}main{max-width:760px;margin:auto;padding:38px 24px 70px}h1{font-size:42px;line-height:1.1;margin:35px 0 20px}h2{font-size:23px;line-height:1.3;margin-top:32px}a{color:#286f64;text-underline-offset:4px}.brand{font-size:11px;font-weight:800;letter-spacing:1.5px;text-decoration:none}.draft{background:#ecd5a1;padding:14px;border-radius:8px;font-size:13px}footer{border-top:1px solid #bdc8b6;padding-top:25px;margin-top:45px;font-size:12px}nav a{display:block;padding:15px;border-bottom:1px solid #bdc8b6}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}details{border-bottom:1px solid #bdc8b6;padding:15px 0}summary{cursor:pointer}li{margin:10px 0}`);
 for(const [key,doc]of Object.entries(docs))await writeFile(new URL(`${key}.html`,out),frame(doc.title,`${draft?'<p class="draft">Preview policy: publisher identity and a public contact must be configured before store release.</p>':''}<p>${escape(doc.intro)}</p>${doc.sections.map(([title,text])=>`<section><h2>${escape(title)}</h2><p>${escape(text)}</p></section>`).join('')}${doc.links?.map(([label,url])=>`<p><a rel="noopener noreferrer" href="${escape(url)}">${escape(label)}</a></p>`).join('')||''}`));
 const notices=[];
-for(const name of ['react','react-dom','scheduler','@phosphor-icons/react','@fontsource/lilita-one','@fontsource/rubik']){
+for(const name of ['react','react-dom','scheduler','bs58','base-x','@phosphor-icons/react','@fontsource/lilita-one','@fontsource/rubik']){
  const pkg=new URL(`../node_modules/${name}/`,import.meta.url),meta=JSON.parse(await readFile(new URL('package.json',pkg)));
- notices.push({name,version:meta.version,text:await readFile(new URL('LICENSE',pkg),'utf8')});
+ const license=await readFile(new URL('LICENSE',pkg),'utf8').catch(()=>readFile(new URL('LICENSE.md',pkg),'utf8'));
+ notices.push({name,version:meta.version,text:license});
 }
 let native=[];try{native=JSON.parse(await readFile(new URL('store/native-dependencies.json',root)));}catch{}
 const apache=await readFile(new URL('store/Apache-2.0.txt',root),'utf8');
