@@ -23,17 +23,23 @@ if((!countOnly&&(!args.includes('--title')||!args.includes('--body')||title.leng
   console.error('Usage: node scripts/cloud-message.mjs --category news --title "Title" --body "Message" [--route home] [--token-file /private/path] [--send]');
   console.error('   or: node scripts/cloud-message.mjs --category news --segment all|reached:N|not-reached:N|inactive:D[,...] (--count | --title "Title" --body "Message" [--route home] [--send])');process.exit(1);
 }
-let db,tokens;
+// Production Postgres is private to Railway, so without DATABASE_URL each query runs inside the API service over
+// 'railway ssh' (operator's Railway login; the database credential never leaves Railway).
+const query=async(sql,values)=>{
+  if(process.env.DATABASE_URL){
+    const pg=createRequire(new URL('../../backend/package.json',import.meta.url))('pg'),db=new pg.Client({connectionString:process.env.DATABASE_URL});
+    await db.connect();try{return (await db.query(sql,values)).rows;}finally{await db.end();}
+  }
+  const code=`import pg from 'pg';const c=new pg.Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log('ROWS'+JSON.stringify((await c.query(${JSON.stringify(sql)},${JSON.stringify(values)})).rows));await c.end();`;
+  const out=execFileSync('railway',['ssh','-p','f99e792b-0fb1-4497-9a11-bde758ba69a8','-s','pengucrush-api','-e','production','--','sh','-c',`cd /srv/backend && echo ${Buffer.from(code).toString('base64')} | base64 -d | node --input-type=module`],{encoding:'utf8',maxBuffer:64<<20});
+  const line=out.split('\n').find(l=>l.startsWith('ROWS'));if(!line)throw Error('Railway query failed. Run railway login as the project owner.');
+  return JSON.parse(line.slice(4));
+};
+let tokens;
 if(segmented){
-  const pg=createRequire(new URL('../../backend/package.json',import.meta.url))('pg');
-  const local=process.env.DATABASE_URL,connectionString=local||JSON.parse(execFileSync('railway',['variable','list','--service','Postgres','--project','f99e792b-0fb1-4497-9a11-bde758ba69a8','--environment','production','--json'],{encoding:'utf8'})).DATABASE_PUBLIC_URL;
-  // Without a URL pg would silently fall back to PG* variables or localhost and target the wrong tokens.
-  if(!connectionString)throw Error('Set DATABASE_URL or sign in with the Railway CLI.');
-  db=new pg.Client({connectionString,ssl:local?undefined:{rejectUnauthorized:false}});
-  await db.connect();
-  tokens=(await db.query(`SELECT DISTINCT push_token FROM installs i WHERE push_active AND push_${category} AND push_token IS NOT NULL${where.map(w=>' AND '+w).join('')}`,params)).rows.map(r=>r.push_token);
+  tokens=(await query(`SELECT DISTINCT push_token FROM installs i WHERE push_active AND push_${category} AND push_token IS NOT NULL${where.map(w=>' AND '+w).join('')}`,params)).map(r=>r.push_token);
   console.log(`Matched ${tokens.length} opted-in installation token(s).`);
-  if(countOnly){await db.end();process.exit(0);}
+  if(countOnly)process.exit(0);
 }
 const require=createRequire(import.meta.url),globalRoot=execFileSync('npm',['root','-g'],{encoding:'utf8'}).trim();
 const auth=require(join(globalRoot,'firebase-tools/lib/auth.js')),account=auth.getGlobalDefaultAccount();
@@ -48,7 +54,7 @@ if(!segmented){
   console.log(validate_only?'Cloud message validated. Nothing was sent.':`Cloud message accepted: ${result.name}`);
 }else{
   // One request per token, 10 at a time. Dead tokens are only marked inactive (never deleted), and only on a real --send.
-  const summary={validateOnly:validate_only,matched:tokens.length,accepted:0,failed:0,deactivated:0,reasons:{}};let next=0;
+  const summary={validateOnly:validate_only,matched:tokens.length,accepted:0,failed:0,deactivated:0,reasons:{}},dead=[];let next=0;
   await Promise.all(Array.from({length:10},async()=>{while(next<tokens.length){
     const pushToken=tokens[next++];let ok=false,result;
     try{({ok,result}=await send({token:pushToken}));}catch(error){result={error:{status:error.cause?.code||error.message}};}
@@ -56,10 +62,9 @@ if(!segmented){
     const error=result.error,reason=error?.details?.find(d=>d.errorCode)?.errorCode||error?.status||'UNKNOWN';
     summary.failed++;summary.reasons[reason]=(summary.reasons[reason]||0)+1;
     // Dead, foreign-project or malformed tokens only; a bad payload is also INVALID_ARGUMENT but never names the registration token.
-    const dead=error?.status==='NOT_FOUND'||error?.details?.some(d=>['UNREGISTERED','SENDER_ID_MISMATCH'].includes(d.errorCode))||(error?.status==='INVALID_ARGUMENT'&&/registration token/i.test(error.message));
-    if(!validate_only&&dead){await db.query('UPDATE installs SET push_active=false,push_updated_at=now() WHERE push_token=$1',[pushToken]);summary.deactivated++;}
+    if(error?.status==='NOT_FOUND'||error?.details?.some(d=>['UNREGISTERED','SENDER_ID_MISMATCH'].includes(d.errorCode))||(error?.status==='INVALID_ARGUMENT'&&/registration token/i.test(error.message)))dead.push(pushToken);
   }}));
-  await db.end();
+  if(!validate_only&&dead.length){await query('UPDATE installs SET push_active=false,push_updated_at=now() WHERE push_token=ANY($1::text[])',[dead]);summary.deactivated=dead.length;}
   console.log(JSON.stringify(summary));
   process.exitCode=summary.failed?1:0;
 }

@@ -1,13 +1,10 @@
-import { execFileSync } from 'node:child_process';
 import pg from 'pg';
 // Operator-only, read-only report. The connection URL stays in process memory and is never printed.
-let connectionString=process.env.DATABASE_URL,ssl;
-if(!connectionString){
-  const vars=JSON.parse(execFileSync('railway',['variable','list','--service','Postgres','--project','f99e792b-0fb1-4497-9a11-bde758ba69a8','--environment','production','--json'],{encoding:'utf8'}));
-  connectionString=vars.DATABASE_PUBLIC_URL;ssl={rejectUnauthorized:false};
-}
-if(!connectionString)throw Error('Set DATABASE_URL or sign in with the Railway CLI.');
-const client=new pg.Client({connectionString,ssl});await client.connect();
+// Production Postgres is private to Railway: run this inside the API service, e.g.
+// railway ssh -p f99e792b-0fb1-4497-9a11-bde758ba69a8 -s pengucrush-api -e production -- node stats.mjs
+const connectionString=process.env.DATABASE_URL;
+if(!connectionString)throw Error('Set DATABASE_URL, or run inside Railway: railway ssh -p f99e792b-0fb1-4497-9a11-bde758ba69a8 -s pengucrush-api -e production -- node stats.mjs');
+const client=new pg.Client({connectionString});await client.connect();
 try {
   await client.query('BEGIN READ ONLY');
   const day=d=>`count(*) FILTER (WHERE last_seen>now()-interval '${d} days')::int`;

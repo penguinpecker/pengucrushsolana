@@ -79,7 +79,7 @@ unregistered, invalid or from another project are marked inactive, never deleted
 Progress filters use the level sent with each app open, so pre-0.6.2 progress
 counts once the player opens 0.6.2. Server data is no longer pruned:
 expired sessions and used sign-in challenges stay in the database and are still
-rejected. Read-only stats: `cd backend && node stats.mjs`.
+rejected. Read-only stats: `railway ssh -p f99e792b-0fb1-4497-9a11-bde758ba69a8 -s pengucrush-api -e production -- node stats.mjs`.
 
 ## Leaderboard and SOL purchases
 

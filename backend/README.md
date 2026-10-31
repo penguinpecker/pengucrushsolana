@@ -41,4 +41,4 @@ Play telemetry: `POST /v1/telemetry` (no sign-in, 30/min per IP) records every i
 
 Server data is no longer pruned. Logout expires its session, and a used sign-in challenge is marked `used_at`; both rows stay and are still rejected. Sign-ins are counted in `wallets`. `DELETE /v1/profile` is unchanged.
 
-Read-only report (installs, active installs, wallets, levels reached/completed, push reach): `node stats.mjs` from `backend/`. It uses `DATABASE_URL` or reads the Postgres public URL through the Railway CLI, runs in a read-only transaction and never prints the URL.
+Read-only report (installs, active installs, wallets, levels reached/completed, push reach). Postgres is private to Railway, so run it inside the API service: `railway ssh -p f99e792b-0fb1-4497-9a11-bde758ba69a8 -s pengucrush-api -e production -- node stats.mjs` (or set `DATABASE_URL` for a local database).
