@@ -1,13 +1,13 @@
 PENGUCRUSH — SOLANA SEEKER / dAPP STORE
-Prepared 17 October 2026
+Prepared 31 October 2026
 
 RELEASE
 upload/PenguCrush-Seeker-0.6.2.apk
 Package: com.pengucrush.islands
 Version: 0.6.2 (Android version code 9)
 Minimum Android: API 26. Target: API 36.
-Size: 9078711 bytes
-APK SHA-256: 9bcb0917fec03541ae58651de08bcbfd0de1b2daaa1724c823ce725399390d3d
+Size: 9080927 bytes
+APK SHA-256: 2da16f1cb169adb8ccce20a04f7640a972442cc016dd81caec31db2544a3c750
 
 SIGNING
 Signed with the existing dedicated 3072-bit RSA Seeker release key.
@@ -35,11 +35,11 @@ PAYMENTS — ENABLED ON MAINNET
 Railway SOLANA_TREASURY is configured with the publisher-approved address:
 6zuPtQg1rygxNgzZmjn13YB3bqMGiMLbPAWbrbvwJykg
 The live API reports this exact recipient and paymentsEnabled: true.
-This 0.6.1 APK records completed level activity on Solana using a replay-verified
-Memo transaction, in addition to the 0.6.0 boosters, music and bottom-navigation
-Leaderboard. The wallet pays the normal Solana network fee for each activity
-transaction. Deploy the updated backend endpoint `/v1/activity/transaction`
-before store submission. Payment configuration still refreshes when
+This 0.6.2 APK sends gameplay events for every install to `/v1/telemetry`, offers the
+news opt-in after the first level-1 win and registers the push token when a cloud
+category is on. It keeps 0.6.1's replay-verified Solana Memo for completed levels
+(the wallet pays the normal network fee). The 0.6.2 backend with `/v1/telemetry` and
+`/v1/activity/transaction` is deployed (health reports 0.6.2, 31 October 2026). Payment configuration still refreshes when
 the app opens or resumes; later recipient changes do not require rebuilding. Existing orders retain
 the recipient recorded when they were created.
 Do not put a seed phrase or private key into that variable or into the app.
