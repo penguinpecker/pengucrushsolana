@@ -18,7 +18,7 @@
   "packageName": "com.pengucrush.islands",
   "versionName": "0.6.2",
   "versionCode": 9,
-  "whatsNew": "Record completed levels on Solana with a wallet-approved transaction. This release also includes two powerful boosters, original music, richer sound effects, separate audio controls and the Leaderboard in bottom navigation.",
+  "whatsNew": "Fixes the Next button after a completed level. Turn on crew news after your first win for new islands, events and rewards. Anonymous gameplay stats help us improve the game.",
   "icon": "assets/icon-512.png",
   "banner": "assets/banner-1200x600.png",
   "screenshots": [
