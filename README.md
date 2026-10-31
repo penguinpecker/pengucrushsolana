@@ -58,6 +58,29 @@ level activity on Solana. Version 0.6.0 introduced opt-in Firebase cloud
 announcements; retrieve its Android configuration as described in
 [backend/README.md](backend/README.md) before rebuilding.
 
+## Play data and targeted announcements (0.6.2)
+
+Version 0.6.2 (Android version code 9) records every install, wallet or not, by its
+anonymous installation ID: app opens, level starts, wins and losses are sent to
+`POST /v1/telemetry`. After the first level 1 win, the results dialog asks once
+whether to enable cloud announcements; opted-in installs register their
+notification token and categories with the API. The operator then targets groups
+with `--segment` (a comma-separated AND of `all`, `reached:N`, `not-reached:N`,
+`inactive:D`) using their own Firebase login; no Firebase secret is stored on Railway.
+
+```sh
+cd app
+node scripts/cloud-message.mjs --category news --segment reached:5,inactive:7 --count
+node scripts/cloud-message.mjs --category news --segment not-reached:3 --title 'Island two awaits' --body 'Kip found a new path.' --route journey
+```
+
+Without `--send` it only validates. With `--send`, tokens Firebase reports as
+unregistered, invalid or from another project are marked inactive, never deleted.
+Progress filters use the level sent with each app open, so pre-0.6.2 progress
+counts once the player opens 0.6.2. Server data is no longer pruned:
+expired sessions and used sign-in challenges stay in the database and are still
+rejected. Read-only stats: `cd backend && node stats.mjs`.
+
 ## Leaderboard and SOL purchases
 
 Leaderboard in the bottom navigation opens overall and per-level rankings. Every completed level offers an

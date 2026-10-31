@@ -20,6 +20,7 @@ public final class CloudSyncWorker extends Worker {
                 NotificationHub.firebase(c); FirebaseMessaging messaging=FirebaseMessaging.getInstance();
                 messaging.setDeliveryMetricsExportToBigQuery(false);
                 if(deleting){
+                    NotificationHub.prefs(c).edit().remove("token").apply();
                     messaging.setAutoInitEnabled(false);
                     for(String kind:new String[]{"events","news"}) Tasks.await(messaging.unsubscribeFromTopic(NotificationHub.topic(kind)),30,TimeUnit.SECONDS);
                     Tasks.await(messaging.deleteToken(),30,TimeUnit.SECONDS);
@@ -28,7 +29,8 @@ public final class CloudSyncWorker extends Worker {
                 }else{
                     // Register only after both the in-app opt-in and Android permission.
                     messaging.setAutoInitEnabled(true);
-                    Tasks.await(messaging.getToken(),30,TimeUnit.SECONDS);
+                    String token=Tasks.await(messaging.getToken(),30,TimeUnit.SECONDS);
+                    NotificationHub.prefs(c).edit().putString("token",token).apply();
                     for(String kind:new String[]{"events","news"}){
                         if(!NotificationHub.wantsCloud(c))break;
                         Tasks.await(NotificationHub.enabled(c,kind)?messaging.subscribeToTopic(NotificationHub.topic(kind)):messaging.unsubscribeFromTopic(NotificationHub.topic(kind)),30,TimeUnit.SECONDS);

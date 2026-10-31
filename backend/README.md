@@ -36,3 +36,9 @@ The 0.6.1 client requests `/v1/catalog?version=2` to see the two power packs.
 The default catalog keeps the three original packs for 0.5.0 clients. All pack
 amounts and contents are selected by the server, and older confirmed receipts
 retain their original contents. Score replays support both new powers.
+
+Play telemetry: `POST /v1/telemetry` (no sign-in, 30/min per IP) records every install by its anonymous installation UUID plus `open`, `start`, `win` and `lose` events. Event IDs make retries idempotent; the response's `accepted` counts new rows. A valid session bearer links the wallet; a missing or expired one keeps the events anonymous. The optional `push` field stores the FCM token and chosen categories for operator-sent segment pushes (`push_active` needs a token and a category).
+
+Server data is no longer pruned. Logout expires its session, and a used sign-in challenge is marked `used_at`; both rows stay and are still rejected. Sign-ins are counted in `wallets`. `DELETE /v1/profile` is unchanged.
+
+Read-only report (installs, active installs, wallets, levels reached/completed, push reach): `node stats.mjs` from `backend/`. It uses `DATABASE_URL` or reads the Postgres public URL through the Railway CLI, runs in a read-only transaction and never prints the URL.

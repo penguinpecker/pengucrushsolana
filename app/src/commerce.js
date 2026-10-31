@@ -17,6 +17,8 @@ globalThis.addEventListener?.('pengu:wallet',event=>{
 export const shortWallet=wallet=>wallet?`${wallet.slice(0,4)}…${wallet.slice(-4)}`:'';
 export const sol=lamports=>Number(lamports/1e9).toLocaleString('en-US',{maximumFractionDigits:9});
 export const nativeWalletAvailable=()=>!!globalThis.PenguNative?.walletRequest;
+export function installationId(){let id=localStorage.getItem(INSTALLATION);if(!id){id=crypto.randomUUID();localStorage.setItem(INSTALLATION,id);}return id;}
+export const walletSession=()=>read(SESSION);
 function native(action,args={}) {
   if(!nativeWalletAvailable())return Promise.reject(new Error('Open the PenguCrush Android app on your Seeker to use its wallet.'));
   return new Promise((resolve,reject)=>{
@@ -48,7 +50,6 @@ export function useCommerce(grant) {
   const [orders,setOrders]=useState([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[error,setError]=useState('');
   const busyRef=useRef(false);
   function updateSession(value){if(value?.wallet!==sessionRef.current?.wallet)setOrders([]);value?write(SESSION,value):localStorage.removeItem(SESSION);sessionRef.current=value;setSession(value);}
-  function installation(){let id=localStorage.getItem(INSTALLATION);if(!id){id=crypto.randomUUID();localStorage.setItem(INSTALLATION,id);}return id;}
   function merge(order){setOrders(rows=>[order,...rows.filter(r=>r.id!==order.id)]);if(order.status==='confirmed'){grantRef.current(order);const p=read(PENDING);if(p?.orderId===order.id)localStorage.removeItem(PENDING);}return order;}
   async function connectWallet(){
     if(sessionRef.current&&new Date(sessionRef.current.expiresAt)>new Date())return sessionRef.current;
@@ -71,7 +72,7 @@ export function useCommerce(grant) {
   }
   async function refreshOrders(auth=sessionRef.current,checkPending=false) {
     if(!auth)return;
-    const data=await api(`/orders?installation=${installation()}`,{session:auth});
+    const data=await api(`/orders?installation=${installationId()}`,{session:auth});
     for(const order of data.orders)if(order.status==='confirmed'){grantRef.current(order);if(read(PENDING)?.orderId===order.id)localStorage.removeItem(PENDING);}
     setOrders(data.orders);
     if(checkPending)for(const order of data.orders.filter(o=>o.status==='pending').slice(0,8))await checkOrder(order.id,undefined,auth);
@@ -103,7 +104,7 @@ export function useCommerce(grant) {
     // Earlier orders remain recoverable in the server's installation history.
     if(pending?.requestTag&&pending.requestTag!==requestTag)pending=null;
     if(!pending?.body) {
-      pending={wallet:auth.wallet,requestTag,body:{...input,installation:installation(),idempotencyKey:crypto.randomUUID()}};
+      pending={wallet:auth.wallet,requestTag,body:{...input,installation:installationId(),idempotencyKey:crypto.randomUUID()}};
       write(PENDING,pending);
     }
     const order=await api('/orders',{method:'POST',body:pending.body,session:auth});

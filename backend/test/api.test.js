@@ -36,6 +36,9 @@ test('PostgreSQL integration: wallet ownership, replay, exact payment, concurren
   await request('/auth/verify',{method:'POST',body:{wallet:address,nonce:challenge.nonce,signature:bs58.encode(new Uint8Array(64))},expected:401});
   const {token}=await request('/auth/verify',{method:'POST',body:{wallet:address,nonce:challenge.nonce,signature}});
   await request('/auth/verify',{method:'POST',body:{wallet:address,nonce:challenge.nonce,signature},expected:401});
+  assert.ok((await pool.query('SELECT used_at FROM challenges WHERE nonce=$1',[challenge.nonce])).rows[0].used_at,'a used challenge is kept and marked');
+  const signIns=async()=>(await pool.query('SELECT sign_ins FROM wallets WHERE wallet=$1',[address])).rows[0].sign_ins;
+  assert.equal(await signIns(),1);
   let game;
   for(let seed=1;seed<100;seed++){game=new RecordedGame(LEVELS[0],seed);while(game.status==='playing')game.swap(...game.legalMoves()[0]);if(game.status==='won')break;}
   assert.equal(game.status,'won');
@@ -66,6 +69,43 @@ test('PostgreSQL integration: wallet ownership, replay, exact payment, concurren
   assert.equal((await request(`/orders/${power.id}/confirm`,{method:'POST',body:{},token})).status,'confirmed');
   const receipts=await request(`/orders?installation=${installation}`,{token});assert.equal(receipts.orders.length,3);
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM orders WHERE status='confirmed'")).rows[0].n,3);
+  // Telemetry: every install is recorded, events are idempotent, a session only adds the wallet.
+  const install=randomUUID(),at=Date.now(),opened={id:randomUUID(),type:'open',at};
+  const events=[opened,{id:randomUUID(),type:'start',level:1,at},{id:randomUUID(),type:'win',level:1,score:120,stars:3,at:at+600_000}];
+  const telemetry=(body,options)=>request('/telemetry',{method:'POST',body:{installation:install,appVersion:'0.6.2',events:[],...body},...options});
+  const installRow=id=>pool.query('SELECT wallet,push_token,push_events,push_news,push_active FROM installs WHERE installation=$1',[id]).then(r=>r.rows[0]);
+  assert.equal((await telemetry({events},{token:'f'.repeat(64)})).accepted,3);
+  assert.equal((await telemetry({events},{token:'garbage'})).accepted,0);
+  assert.equal((await telemetry({events:[...events,{id:randomUUID(),type:'lose',level:2,at}]})).accepted,1);
+  assert.equal((await installRow(install)).wallet,null);
+  const times=(await pool.query('SELECT bool_and(wallet IS NULL) AS anonymous,bool_or(occurred_at=to_timestamp($2::float8/1000)) AS kept,bool_and(occurred_at<=now()) AS clamped FROM events WHERE installation=$1',[install,at])).rows[0];
+  assert.deepEqual(times,{anonymous:true,kept:true,clamped:true});
+  for(const bad of [{installation:'nope'},{events:[{...opened,type:'quit'}]},{events:[{id:randomUUID(),type:'win',at}]},{events:Array.from({length:101},()=>({id:randomUUID(),type:'open',at}))}])
+    await telemetry(bad,{expected:400});
+  const linked=randomUUID();
+  assert.equal((await telemetry({installation:linked,events:[{id:randomUUID(),type:'open',at}]},{token})).accepted,1);
+  await telemetry({installation:linked,events:[{id:randomUUID(),type:'open',at}]},{token:'garbage'});
+  assert.equal((await installRow(linked)).wallet,address);
+  assert.deepEqual((await pool.query('SELECT wallet FROM events WHERE installation=$1 ORDER BY wallet',[linked])).rows.map(r=>r.wallet),[address,null]);
+  await telemetry({push:{token:'fcm-token',events:true,news:false}});
+  await telemetry({});
+  assert.deepEqual(await installRow(install),{wallet:null,push_token:'fcm-token',push_events:true,push_news:false,push_active:true});
+  await telemetry({push:{token:'fcm-token',events:false,news:false}});assert.equal((await installRow(install)).push_active,false);
+  await telemetry({push:{token:'',events:true,news:true}});
+  assert.deepEqual(await installRow(install),{wallet:null,push_token:null,push_events:true,push_news:true,push_active:false});
+  // A challenge stays one-use under concurrency; logout keeps the session row but rejects its token.
+  const again=await request('/auth/challenge',{method:'POST',body:{wallet:address}});
+  const signed=JSON.stringify({wallet:address,nonce:again.nonce,signature:bs58.encode(nacl.sign.detached(Buffer.from(again.message),wallet.secretKey))});
+  const race=await Promise.all(Array.from({length:4},()=>fetch(origin+'/v1/auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:signed}).then(async r=>({status:r.status,...await r.json()}))));
+  assert.deepEqual(race.map(r=>r.status).sort(),[200,401,401,401]);
+  assert.equal(await signIns(),2);
+  const second=race.find(r=>r.status===200).token;
+  await request('/auth/logout',{method:'POST',body:{},token:second});
+  await request('/auth/logout',{method:'POST',body:{},token:second,expected:401});
+  assert.deepEqual((await pool.query('SELECT count(*)::int AS kept,count(*) FILTER (WHERE expires_at>now())::int AS active FROM sessions WHERE wallet=$1',[address])).rows[0],{kept:2,active:1});
+  const afterLogout=randomUUID();
+  await telemetry({installation:afterLogout,events:[{id:randomUUID(),type:'open',at}]},{token:second});
+  assert.equal((await installRow(afterLogout)).wallet,null);
   await request('/profile',{method:'DELETE',token});assert.equal((await request('/leaderboard')).entries.length,0);
   await request(`/orders?installation=${installation}`,{token,expected:401});
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM orders')).rows[0].n,3);

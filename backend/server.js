@@ -11,5 +11,4 @@ await pool.query(await readFile(new URL('schema.sql',import.meta.url),'utf8'));
 const connection=new Connection(rpc,{commitment:'finalized',disableRetryOnRateLimit:true,fetch:async(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(12000)})});
 const app=createApp({pool,connection,cluster,treasury:process.env.SOLANA_TREASURY||'',allowLocal:process.env.NODE_ENV!=='production'});
 const server=app.listen(Number(process.env.PORT||8080),'0.0.0.0',()=>console.log(`PenguCrush API ready (${cluster}; payments ${process.env.SOLANA_TREASURY?'enabled':'awaiting treasury'})`));
-const cleanup=setInterval(()=>pool.query('DELETE FROM challenges WHERE expires_at<now(); DELETE FROM sessions WHERE expires_at<now()').catch(()=>{}),3600_000);cleanup.unref();
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{clearInterval(cleanup);server.close(()=>pool.end().then(()=>process.exit(0)));});
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close(()=>pool.end().then(()=>process.exit(0)));});

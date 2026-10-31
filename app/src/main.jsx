@@ -22,8 +22,9 @@ import CampaignMap from './CampaignMap.jsx';
 import Journal, {RewardContents} from './Journal.jsx';
 import LoadingScreen from './LoadingScreen.jsx';
 import GameBoard from './GameBoard.jsx';
-import {SettingsLinks,NotificationSettings,PrivacyCenter,isPolicyPage,policyKey} from './SettingsCenter.jsx';
+import {SettingsLinks,NotificationSettings,PrivacyCenter,PushPrompt,isPolicyPage,policyKey} from './SettingsCenter.jsx';
 import {syncNotificationGame} from './notifications.js';
+import {track} from './telemetry.js';
 import './style.css';
 import './expedition.css';
 import './campaign.css';
@@ -83,7 +84,18 @@ function App() {
   }
   useEffect(()=>{syncNotificationGame(profile);},[profile]);
   useEffect(()=>installAudioLifecycle(),[]);
+  // One open per launch, then one per return after 30 s away; quick wallet or permission round trips are not opens.
+  // Each open carries the player's current level so progress segments include players from before 0.6.2.
+  useEffect(()=>{
+    let paused=0;const pause=()=>{paused=Date.now();},open=()=>{if(Date.now()-paused>30_000)track('open',{level:Math.min(100,profileRef.current.unlocked)});};
+    open();addEventListener('pengu:native-pause',pause);addEventListener('pengu:commerce-resume',open);
+    return()=>{removeEventListener('pengu:native-pause',pause);removeEventListener('pengu:commerce-resume',open);};
+  },[]);
   useEffect(()=>{configureAudio({music:profile.music,effects:profile.sound,scene:screen==='play'?'play':'camp'});},[profile.music,profile.sound,screen]);
+  // Set when the level-1 push prompt opens the Privacy Policy, so leaving the policy returns to that result dialog.
+  const policyReturn=useRef(null);
+  useEffect(()=>{if(screen!=='privacy-policy')policyReturn.current=null;},[screen]);
+  function leavePolicy(to){if(to==='privacy'&&policyReturn.current)location.hash=policyReturn.current;else go(to);}
   function openSettingsPage(page){setDialog(null);go(page);}
   function backToSettings(){setScreen('home');location.hash='home';setTimeout(()=>setDialog('settings'),0);}
   function eraseSave(){
@@ -98,6 +110,8 @@ function App() {
     if(location.hash!==`#${to}`)location.hash=to;
     sound('tap',profileRef.current.sound);
   }
+  // awardWin counts a run (level + seed) once, even when a won checkpoint is resumed after the app was killed.
+  function wonOnce(before,after,game){if(after.stats.wins>before.stats.wins)track('win',{level:game.root.id,stars:game.stars(),score:game.score});}
   function begin(levelId, resume=false) {
     if(!review && levelId>profileRef.current.unlocked)return toast('Finish the previous level to unlock this one.');
     const level=LEVELS[levelId-1];
@@ -110,11 +124,12 @@ function App() {
       game=new Game(level,level.seed+(attempt-1)*104729);
       game.companion=COMPANIONS[p.companion].type<level.colors?p.companion:0;
       updateProfile({...p,attempts:{...p.attempts,[levelId]:attempt},run:game.snapshot()});
+      track('start',{level:levelId});
     }
     engine.current=game;setFocusedCell(game.board.findIndex(Boolean));setState(game.snapshot());setScreen('play');setDialog(null);setPreview(null);setSelected(null);setHint([]);setBooster(null);setClearing([]);setCombo('');
     if(game.status==='won') {
       const before=profileRef.current;
-      if(!review || game.level.id<=before.unlocked){const after=awardWin(before,game.root.id,game.stars(),game.seed);setReward(after.coins-before.coins);updateProfile(after);}
+      if(!review || game.level.id<=before.unlocked){const after=awardWin(before,game.root.id,game.stars(),game.seed);setReward(after.coins-before.coins);updateProfile(after);wonOnce(before,after,game);}
       setDialog('won');
     } else if(game.status==='lost')setDialog('lost');else if(game.status==='phase')setDialog('phase');
     location.hash=`play/${levelId}`;
@@ -168,7 +183,7 @@ function App() {
       if(chooser){chooser.click();return true;}
       if(dialog){if(['won','lost','phase'].includes(dialog))go('journey');else setDialog(null);return true;}
       if(screen==='play'){setDialog('pause');return true;}
-      if(['privacy-policy','terms','deletion','support','licenses'].includes(screen)){go('privacy');return true;}
+      if(['privacy-policy','terms','deletion','support','licenses'].includes(screen)){leavePolicy('privacy');return true;}
       if(['privacy','notifications'].includes(screen)){backToSettings();return true;}
       if(screen!=='home'){go('home');return true;}
       return false;
@@ -223,10 +238,10 @@ function App() {
         const before=profileRef.current;
         // Review-only future levels don't alter the real campaign unlock state.
         if(review && game.level.id>before.unlocked){setReward(0);}
-        else {const after=awardWin(before,game.root.id,game.stars(),game.seed);setReward(after.coins-before.coins);updateProfile(after);}
+        else {const after=awardWin(before,game.root.id,game.stars(),game.seed);setReward(after.coins-before.coins);updateProfile(after);wonOnce(before,after,game);}
         setDialog('won');sound('win',profileRef.current.sound);
       } else if(game.status==='phase'){setDialog('phase');sound('win',profileRef.current.sound);}
-      else if(game.status==='lost'){setDialog('lost');sound('invalid',profileRef.current.sound);}
+      else if(game.status==='lost'){setDialog('lost');sound('invalid',profileRef.current.sound);track('lose',{level:game.root.id});}
     } finally {busyRef.current=false;setBusy(false);setClearing([]);setCombo('');}
   }
   function swap(a,b) {
@@ -311,7 +326,7 @@ function App() {
     {!ready&&<LoadingScreen progress={loadProgress} failed={loadFailed} onRetry={()=>setLoadAttempt(n=>n+1)}/>}
     <div className="world-backdrop"/>
     {screen==='notifications'&&<div className="view settings-view"><NotificationSettings onBack={backToSettings} onPrivacy={()=>go('privacy-policy')}/></div>}
-    {isPolicyPage(screen)&&<div className="view settings-view"><PrivacyCenter key={screen} page={policyKey(screen)} onNavigate={go} onBack={backToSettings} onDelete={eraseSave}/></div>}
+    {isPolicyPage(screen)&&<div className="view settings-view"><PrivacyCenter key={screen} page={policyKey(screen)} onNavigate={leavePolicy} onBack={backToSettings} onDelete={eraseSave}/></div>}
     {screen==='home'&&<section className="home-view view">
       {renderTop({})}
       <div className="home-title"><span className="eyebrow">PACK LIGHT. CRUSH BIG.</span><h1><span>PENGU</span><span>CRUSH<span className="title-spark">✦</span></span></h1><span className="title-ribbon">BEYOND THE HORIZON</span></div>
@@ -351,7 +366,7 @@ function App() {
       {dialog==='reward'&&loot&&<><Landmark index={11} className="reward-chest-art"/><span className="eyebrow">WELL EARNED. WELL PACKED.</span><h3>{loot.title}</h3><RewardContents reward={loot.reward}/><button className="primary-button" onClick={()=>setDialog(null)}>Into the backpack<Check weight="bold"/></button></>}
       {dialog==='chest'&&chest&&<><Landmark index={11} className="reward-chest-art"/><h3>{CHAPTERS[chest.chapter].name}</h3><p className="lesson">Collect {CHESTS[chest.tier].target} stars on this island to open this chest. Replay levels to improve your stars.</p><div className="chest-star-count"><Star weight="fill"/><b>{regionStars(profile,chest.chapter)}</b> / {CHESTS[chest.tier].target}</div><RewardContents reward={CHESTS[chest.tier].reward}/><button className="primary-button" disabled={!!profile.claims[`chest:${chest.chapter}:${chest.tier}`]||regionStars(profile,chest.chapter)<CHESTS[chest.tier].target} onClick={collectChest}>{profile.claims[`chest:${chest.chapter}:${chest.tier}`]?'Already collected':regionStars(profile,chest.chapter)>=CHESTS[chest.tier].target?'Open the chest':'Keep collecting stars'}<Star weight="fill"/></button></>}
       {dialog==='relic'&&<><Landmark index={relic} className="relic-detail-art"/><span className="eyebrow">{profile.relics.includes(relic)?'BEACON RESTORED':`ACT ${CHAPTERS[relic].act+1} · ${ACTS[CHAPTERS[relic].act]}`}</span><h3>{CHAPTERS[relic].relic}</h3><p className="lesson">{CHAPTERS[relic].story}</p><div className="relic-requirement"><FlagPennant weight="fill"/>{profile.relics.includes(relic)?'Safely tucked in your field journal.':`Complete the level ${CHAPTERS[relic].end} finale.`}</div><button className="primary-button" onClick={()=>setDialog(null)}>{profile.relics.includes(relic)?'One light closer to home':'Adventure awaits'}<ArrowRight weight="bold"/></button></>}
-    {dialog==='won'&&<><div className="celebration-sparks" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i} style={{'--i':i}}/>)}</div><Character index={state.companion} className="modal-mascot result-mascot"/><Stars count={engine.current.stars()} size={54}/><p className="result-copy">{current.id===100?'Ten lights in the sky. Everyone made it home.':`${current.name} cleared.`}</p><div className="result-stats"><div><b>{state.score.toLocaleString()}</b><span>points</span></div><div><b>{state.moves}</b><span>moves saved</span></div><div><b>+{reward}</b><span>shells</span></div></div>{current.relic&&<div className="won-relic"><Landmark index={current.chapter}/><span><small>BEACON RESTORED</small><b>{current.relic}</b><em>{reward>=100?'+100 shells · 1 hammer · 1 shuffle':'A light on the way home.'}</em></span></div>}{[10,20].includes(current.id)&&<p className="friend-unlock"><Sparkle weight="fill"/>{COMPANIONS[current.id/10].name} is ready to join your crew!</p>}<button className="primary-button" disabled={commerce.busy} onClick={continueAfterWin}>{commerce.busy?'Recording on Solana…':current.id<100?'Next adventure':'Explore your journey'}<ArrowRight weight="bold"/></button>{commerce.error&&<p className="commerce-error" role="alert">{commerce.error}</p>}{commerce.notice&&<p className="commerce-status" role="status">{commerce.notice}</p>}<p className="result-copy">Continue to record this level on Solana. Your wallet pays the network fee.</p><SubmitScore snapshot={engine.current.snapshot()} commerce={commerce} onLeaderboard={()=>go('leaderboard')}/><button className="text-button" disabled={commerce.busy} onClick={()=>go('journey')}>Back to the islands</button></>}
+    {dialog==='won'&&<><div className="celebration-sparks" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i} style={{'--i':i}}/>)}</div><Character index={state.companion} className="modal-mascot result-mascot"/><Stars count={engine.current.stars()} size={54}/><p className="result-copy">{current.id===100?'Ten lights in the sky. Everyone made it home.':`${current.name} cleared.`}</p><div className="result-stats"><div><b>{state.score.toLocaleString()}</b><span>points</span></div><div><b>{state.moves}</b><span>moves saved</span></div><div><b>+{reward}</b><span>shells</span></div></div>{current.relic&&<div className="won-relic"><Landmark index={current.chapter}/><span><small>BEACON RESTORED</small><b>{current.relic}</b><em>{reward>=100?'+100 shells · 1 hammer · 1 shuffle':'A light on the way home.'}</em></span></div>}{[10,20].includes(current.id)&&<p className="friend-unlock"><Sparkle weight="fill"/>{COMPANIONS[current.id/10].name} is ready to join your crew!</p>}{current.id===1&&<PushPrompt onPrivacy={()=>{policyReturn.current=location.hash.slice(1);go('privacy-policy');}}/>}<button className="primary-button" disabled={commerce.busy} onClick={continueAfterWin}>{commerce.busy?'Recording on Solana…':current.id<100?'Next adventure':'Explore your journey'}<ArrowRight weight="bold"/></button>{commerce.error&&<p className="commerce-error" role="alert">{commerce.error}</p>}{commerce.notice&&<p className="commerce-status" role="status">{commerce.notice}</p>}<p className="result-copy">Continue to record this level on Solana. Your wallet pays the network fee.</p><SubmitScore snapshot={engine.current.snapshot()} commerce={commerce} onLeaderboard={()=>go('leaderboard')}/><button className="text-button" disabled={commerce.busy} onClick={()=>go('journey')}>Back to the islands</button></>}
       {dialog==='lost'&&<><Character index={state.companion} className="modal-mascot result-mascot"/><p className="result-copy">New board. New plan.<br/>You know what to do.</p>{renderProgress({level:current})}<button className="primary-button" onClick={()=>begin(current.id)}><ArrowClockwise weight="bold"/>Try again · free</button><button className="text-button" onClick={()=>go('journey')}>Back to the islands</button></>}
       {dialog==='pause'&&<><Character index={state.companion} className="modal-mascot"/><p className="result-copy">Your board is saved.</p><button className="primary-button" onClick={()=>setDialog(null)}><Play weight="fill"/>Keep playing</button><button className="secondary-button" onClick={()=>begin(current.id)}><ArrowClockwise/>Start a fresh board</button><button className="secondary-button" onClick={()=>setDialog('settings')}><GearSix/>Options</button><button className="text-button" onClick={()=>go('journey')}>Save & return to the islands</button></>}
       {dialog==='settings'&&<><p className="lesson">Set things your way.</p><div className="settings-list"><button role="switch" aria-checked={profile.sound} onClick={()=>updateProfile(p=>({...p,sound:!p.sound}))}>{profile.sound?<SpeakerHigh weight="duotone"/>:<SpeakerSlash weight="duotone"/>}<span>Sound effects</span><span className={`toggle ${profile.sound?'on':''}`}/></button><button role="switch" aria-checked={profile.music} onClick={()=>updateProfile(p=>({...p,music:!p.music}))}><MusicNotes weight="duotone"/><span>Background music</span><span className={`toggle ${profile.music?'on':''}`}/></button><button role="switch" aria-checked={profile.motion} onClick={()=>updateProfile(p=>({...p,motion:!p.motion}))}><Sparkle weight="duotone"/><span>Animations</span><span className={`toggle ${profile.motion?'on':''}`}/></button>{globalThis.PenguNative&&<button role="switch" aria-checked={profile.haptics} onClick={()=>{updateProfile(p=>({...p,haptics:!p.haptics}));if(!profile.haptics)globalThis.PenguNative.haptic();}}><Heart weight="duotone"/><span>Haptic feedback</span><span className={`toggle ${profile.haptics?'on':''}`}/></button>}</div><button className="secondary-button" onClick={()=>setDialog('help')}><Lightbulb/>How to play</button><SettingsLinks onOpen={openSettingsPage}/><p className="settings-footnote">Your progress stays on this device.<br/>100 levels. Ten islands. One odd crew.</p></>}

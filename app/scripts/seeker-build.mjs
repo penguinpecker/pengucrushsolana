@@ -38,7 +38,7 @@ writeFileSync(join(output, 'APK-SIGNATURE.txt'), verification);
 writeFileSync(join(output, 'APK-METADATA.txt'), badging);
 writeFileSync(join(output, 'SHA256SUMS.txt'), `${hash}  ${apkName}\n`);
 writeFileSync(join(output, 'verification.json'), JSON.stringify({apk: apkName, packageName: 'com.pengucrush.islands',
-  versionName: pkg.version, versionCode: 8, sha256: hash, certificateSha256: fingerprint,
+  versionName: pkg.version, versionCode: Number(badging.match(/versionCode='(\d+)'/)[1]), sha256: hash, certificateSha256: fingerprint,
   certificateMatches: true, debugCertificate: false, debuggable: false, debugReceiver: false,
   zipAlignment16KB: true, nativeUnitTests: 'passed', androidLint: 'passed', builtAt: new Date().toISOString(),
   physicalSeekerTest: 'pending', portalSubmitted: false}, null, 2) + '\n');

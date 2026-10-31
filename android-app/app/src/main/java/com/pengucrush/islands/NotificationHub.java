@@ -54,7 +54,8 @@ public final class NotificationHub {
             result.put("native", true).put("permission", allowed(c)).put("configured", configured())
                 .put("asked", prefs(c).getBoolean("asked",false))
                 .put("deletionPending", prefs(c).getBoolean("deletePending",false))
-                .put("cloudStatus", prefs(c).getString("cloudStatus",configured()?"off":"unconfigured"));
+                .put("cloudStatus", prefs(c).getString("cloudStatus",configured()?"off":"unconfigured"))
+                .put("token", prefs(c).getString("token",""));
         } catch (Exception ignored) { }
         return result;
     }

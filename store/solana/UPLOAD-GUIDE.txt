@@ -2,9 +2,9 @@ PENGUCRUSH — SOLANA SEEKER / dAPP STORE
 Prepared 17 October 2026
 
 RELEASE
-upload/PenguCrush-Seeker-0.6.1.apk
+upload/PenguCrush-Seeker-0.6.2.apk
 Package: com.pengucrush.islands
-Version: 0.6.1 (Android version code 8)
+Version: 0.6.2 (Android version code 9)
 Minimum Android: API 26. Target: API 36.
 Size: 9078711 bytes
 APK SHA-256: 9bcb0917fec03541ae58651de08bcbfd0de1b2daaa1724c823ce725399390d3d

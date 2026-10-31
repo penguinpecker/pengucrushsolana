@@ -15,9 +15,10 @@ export const nativeNotifications=()=>Boolean(globalThis.PenguNative?.notificatio
 export function getNotificationStatus(){
   try{return JSON.parse(globalThis.PenguNative.notificationStatus());}catch{return {native:false,permission:false,configured:false,cloudStatus:'unconfigured'};}
 }
+export const testSession=()=>{const q=new URLSearchParams(globalThis.location?.search||'');return q.has('qa')||q.has('review');};
 export function syncNotificationGame(profile){
   // QA/review progress never schedules reminders for the real player.
-  if(new URLSearchParams(globalThis.location?.search||'').has('qa')||new URLSearchParams(globalThis.location?.search||'').has('review'))return;
+  if(testSession())return;
   globalThis.PenguNative?.notificationGameState?.(JSON.stringify(notificationSummary(profile)));
 }
 export function externalLink(url){

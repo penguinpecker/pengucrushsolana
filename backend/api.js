@@ -30,7 +30,7 @@ export function createApp({pool,connection,treasury='',cluster='mainnet-beta',al
   app.use(cors({origin(origin,done){done(null,!origin||['https://appassets.androidplatform.net','https://digitalchocolate.co'].includes(origin)||(allowLocal&&/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)));}}));
   app.use(express.json({limit:'48kb'}));
   app.use('/v1',rateLimit({windowMs:60_000,limit:120,standardHeaders:'draft-8',legacyHeaders:false,message:{error:'Please wait a minute before trying again.'}}));
-  app.get('/health',async(req,res)=>{await pool.query('SELECT 1');res.json({ok:true,version:'0.6.1',database:'postgresql',cluster,paymentsEnabled:!!treasury});});
+  app.get('/health',async(req,res)=>{await pool.query('SELECT 1');res.json({ok:true,version:'0.6.2',database:'postgresql',cluster,paymentsEnabled:!!treasury});});
   app.get('/v1/catalog',(req,res)=>res.json({cluster,treasury:treasury||null,paymentsEnabled:!!treasury,scoreLamports:SCORE_LAMPORTS,bundles:catalogBundles(req.query.version==='2'?2:1)}));
   app.post('/v1/auth/challenge',rateLimit({windowMs:60_000,limit:10}),async(req,res)=>{
     const wallet=walletAddress(req.body.wallet),nonce=randomBytes(24).toString('hex'),expires=new Date(Date.now()+300_000);
@@ -41,13 +41,15 @@ export function createApp({pool,connection,treasury='',cluster='mainnet-beta',al
   app.post('/v1/auth/verify',async(req,res)=>{
     const wallet=walletAddress(req.body.wallet),{nonce,signature}=req.body;
     if(typeof nonce!=='string'||nonce.length!==48||typeof signature!=='string'||signature.length>100)fail(400,'Invalid sign-in.');
-    const row=(await pool.query('SELECT * FROM challenges WHERE nonce=$1 AND wallet=$2 AND expires_at>now()',[nonce,wallet])).rows[0];
+    const row=(await pool.query('SELECT * FROM challenges WHERE nonce=$1 AND wallet=$2 AND expires_at>now() AND used_at IS NULL',[nonce,wallet])).rows[0];
     let valid=false;
     try{valid=!!row&&nacl.sign.detached.verify(Buffer.from(row.message),bs58.decode(signature),new PublicKey(wallet).toBytes());}catch{}
     if(!valid)fail(401,'Wallet signature could not be verified. Please reconnect.');
     const token=randomBytes(32).toString('hex'),expires=new Date(Date.now()+7*86400_000);
-    // Consuming the challenge and creating its session are one atomic statement.
-    const result=await pool.query('WITH consumed AS (DELETE FROM challenges WHERE nonce=$1 AND expires_at>now() RETURNING wallet) INSERT INTO sessions(token_hash,wallet,expires_at) SELECT $2,wallet,$3 FROM consumed RETURNING wallet',[nonce,hash(token),expires]);
+    // Consuming the challenge (kept, marked used), recording the wallet and creating its session are one atomic statement.
+    const result=await pool.query(`WITH consumed AS (UPDATE challenges SET used_at=now() WHERE nonce=$1 AND expires_at>now() AND used_at IS NULL RETURNING wallet),
+      seen AS (INSERT INTO wallets(wallet,sign_ins) SELECT wallet,1 FROM consumed ON CONFLICT(wallet) DO UPDATE SET last_seen=now(),sign_ins=wallets.sign_ins+1)
+      INSERT INTO sessions(token_hash,wallet,expires_at) SELECT $2,wallet,$3 FROM consumed RETURNING wallet`,[nonce,hash(token),expires]);
     if(!result.rowCount)fail(401,'This sign-in has expired or was already used.');
     res.json({wallet,token,expiresAt:expires});
   });
@@ -58,7 +60,30 @@ export function createApp({pool,connection,treasury='',cluster='mainnet-beta',al
       if(!row)fail(401,'Your wallet session expired. Please reconnect.');req.wallet=row.wallet;req.tokenHash=hash(token);next();
     }catch(error){next(error);}
   };
-  app.post('/v1/auth/logout',auth,async(req,res)=>{await pool.query('DELETE FROM sessions WHERE token_hash=$1',[req.tokenHash]);res.json({ok:true});});
+  app.post('/v1/auth/logout',auth,async(req,res)=>{await pool.query('UPDATE sessions SET expires_at=now() WHERE token_hash=$1',[req.tokenHash]);res.json({ok:true});});
+  const VERSION=/^[0-9A-Za-z.-]{1,20}$/,TYPES=['open','start','win','lose'],int=(v,min,max)=>Number.isInteger(v)&&v>=min&&v<=max,optional=(v,min,max)=>v==null||int(v,min,max);
+  app.post('/v1/telemetry',rateLimit({windowMs:60_000,limit:30}),async(req,res)=>{
+    const {installation,appVersion,push,events}=req.body??{};
+    if(!uuid(installation)||typeof appVersion!=='string'||!VERSION.test(appVersion)||!Array.isArray(events)||events.length>100||
+      push!=null&&(typeof push.token!=='string'||push.token.length>4096||typeof push.events!=='boolean'||typeof push.news!=='boolean')||
+      !events.every(e=>uuid(e?.id)&&TYPES.includes(e.type)&&(e.type==='open'?optional(e.level,1,100):int(e.level,1,100))&&optional(e.score,0,10_000_000)&&optional(e.stars,0,3)&&typeof e.at==='number'))fail(400,'Invalid telemetry.');
+    // A missing, malformed or expired session only means the events stay anonymous.
+    const token=req.get('Authorization')?.replace(/^Bearer /,'');
+    const wallet=token&&/^[0-9a-f]{64}$/.test(token)?(await pool.query('SELECT wallet FROM sessions WHERE token_hash=$1 AND expires_at>now()',[hash(token)])).rows[0]?.wallet??null:null;
+    const now=Date.now(),rows=events.map(e=>({id:e.id,type:e.type,level:e.level??null,score:e.score??null,stars:e.stars??null,
+      at:Number.isFinite(e.at)&&e.at>=Date.UTC(2026,0,1)&&e.at<=now+300_000?new Date(e.at).toISOString():null}));
+    const client=await pool.connect();let accepted;
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO installs(installation,app_version,wallet) VALUES($1,$2,$3) ON CONFLICT(installation) DO UPDATE SET last_seen=now(),app_version=excluded.app_version,wallet=COALESCE(excluded.wallet,installs.wallet)',[installation,appVersion,wallet]);
+      if(push!=null)await client.query("UPDATE installs SET push_token=NULLIF($2::text,''),push_events=$3,push_news=$4,push_active=($2<>'' AND ($3 OR $4)),push_updated_at=now() WHERE installation=$1",[installation,push.token,push.events,push.news]);
+      accepted=(await client.query(`INSERT INTO events(id,installation,wallet,type,level,score,stars,occurred_at,app_version)
+        SELECT id,$1,$2,type,level,score,stars,COALESCE(at,now()),$3 FROM jsonb_to_recordset($4::jsonb) AS e(id uuid,type text,level integer,score integer,stars integer,at timestamptz)
+        ON CONFLICT(id) DO NOTHING`,[installation,wallet,appVersion,JSON.stringify(rows)])).rowCount;
+      await client.query('COMMIT');
+    } catch(error){await client.query('ROLLBACK');throw error;} finally{client.release();}
+    res.json({ok:true,accepted});
+  });
   app.get('/v1/leaderboard',async(req,res)=>{
     const level=req.query.level===undefined||req.query.level==='all'?null:Number(req.query.level);
     if(level!==null&&(!Number.isInteger(level)||level<1||level>100))fail(400,'Choose a level from 1 to 100.');

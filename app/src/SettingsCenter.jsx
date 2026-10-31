@@ -1,8 +1,8 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {ArrowLeft,ArrowRight,Bell,BellRinging,Check,EnvelopeSimple,ShieldCheck,Trash,FileText,BookOpenText} from '@phosphor-icons/react';
 import publisher from '../../store/publisher.json';
 import {policies} from '../../store/policies.js';
-import {getNotificationStatus,externalLink} from './notifications.js';
+import {getNotificationStatus,nativeNotifications,testSession,externalLink} from './notifications.js';
 import './settings.css';
 
 const pages=policies(publisher);
@@ -44,6 +44,25 @@ export function NotificationSettings({onBack,onPrivacy}){
     {feedback&&<p className="settings-feedback" role="status">{feedback}</p>}
   </section>;
 }
+// Shown once ever, after the first level-1 win: marked when shown, whether or not it is answered.
+// Opening its Privacy Policy link unmarks it so the result dialog can show it again on return. A denied Android permission is never re-asked.
+const PROMPTED='pengucrush_push_prompted_v1';
+export function PushPrompt({onPrivacy}){
+  const [show,setShow]=useState(()=>{try{if(localStorage.getItem(PROMPTED))return false;}catch{return false;}const s=getNotificationStatus();return !testSession()&&nativeNotifications()&&s.configured&&!s.deletionPending&&!s.events&&!s.news;});
+  const pending=useRef(false);
+  const enable=()=>globalThis.PenguNative.notificationPreferences(JSON.stringify({events:true,news:true}));
+  useEffect(()=>{
+    if(show)try{localStorage.setItem(PROMPTED,'1');}catch{}
+    const result=()=>{if(!pending.current)return;pending.current=false;if(getNotificationStatus().permission)enable();setShow(false);};
+    addEventListener('pengu:notifications',result);return()=>removeEventListener('pengu:notifications',result);
+  },[]);
+  const answer=yes=>{
+    if(!yes||getNotificationStatus().permission){if(yes)enable();setShow(false);return;}
+    pending.current=true;globalThis.PenguNative.requestNotifications();
+  };
+  const privacy=()=>{try{localStorage.removeItem(PROMPTED);}catch{}onPrivacy();};
+  return show&&<div className="cloud-consent push-prompt" role="region" aria-label="Notification invitation"><b>Get news from the crew?</b><p>New islands, events and rewards — max 2 a day.</p><p className="push-consent">Delivered with Google Firebase. <button className="text-button" onClick={privacy}>Privacy Policy</button></p><div><button className="secondary-button" onClick={()=>answer(false)}>Not now</button><button className="primary-button" onClick={()=>answer(true)}>Enable</button></div></div>;
+}
 export function PrivacyCenter({page,onNavigate,onBack,onDelete}){
   const [confirm,setConfirm]=useState(false);
   const [notices,setNotices]=useState(null),[noticeError,setNoticeError]=useState(false);
@@ -60,7 +79,7 @@ export function PrivacyCenter({page,onNavigate,onBack,onDelete}){
   return <section className="settings-center"><button className="settings-back" onClick={onBack}><ArrowLeft/>Settings</button><div className="settings-hero"><span className="settings-emblem"><ShieldCheck weight="duotone"/></span><span className="eyebrow">GOOD COMPANY. CLEAR RULES.</span><h1>Privacy<br/>& play.</h1><p>Your save belongs to your expedition.<br/>Here’s how we look after it.</p></div>
     <div className="privacy-facts"><span><Check/>No account needed</span><span><Check/>No advertising</span><span><Check/>Progress saved on this device</span></div>
     <div className="settings-links">{[['privacy-policy','Privacy Policy','Your information and choices',ShieldCheck],['terms','Terms of Service','The rules for playing',FileText],['deletion','Delete your data','What is saved, and how to remove it',Trash],['support','Help & support','Get your expedition moving',EnvelopeSimple]].map(([id,title,description,Icon])=><button key={id} onClick={()=>onNavigate(id)}><Icon weight="duotone"/><span>{title}<small>{description}</small></span><ArrowRight/></button>)}<button onClick={()=>onNavigate('licenses')}><BookOpenText/><span>Open-source licenses<small>The tools behind the expedition</small></span><ArrowRight/></button></div>
-    <div className="delete-save"><h2>A fresh start</h2><p>Delete all progress, stars, shells, boosters and quests on this device. All notification categories will turn off. To remove online scores, use Pack → Delete my leaderboard data.</p>{confirm?<div role="region" aria-label="Confirm delete save"><b>Your whole expedition will be erased.</b><p>This cannot be undone, including unused purchased boosters. Receipt IDs are kept to avoid crediting purchases twice. Cloud registration deletion will be queued if needed.</p><button className="danger-button" onClick={onDelete}>Yes, delete my save</button><button className="text-button" onClick={()=>setConfirm(false)}>Keep my expedition</button></div>:<button className="danger-button" onClick={()=>setConfirm(true)}><Trash/>Delete my save</button>}</div><p className="settings-version">PenguCrush · Beyond the Horizon · 0.6.1</p>
+    <div className="delete-save"><h2>A fresh start</h2><p>Delete all progress, stars, shells, boosters and quests on this device. All notification categories will turn off. To remove online scores, use Pack → Delete my leaderboard data.</p>{confirm?<div role="region" aria-label="Confirm delete save"><b>Your whole expedition will be erased.</b><p>This cannot be undone, including unused purchased boosters. Receipt IDs are kept to avoid crediting purchases twice. Cloud registration deletion will be queued if needed.</p><button className="danger-button" onClick={onDelete}>Yes, delete my save</button><button className="text-button" onClick={()=>setConfirm(false)}>Keep my expedition</button></div>:<button className="danger-button" onClick={()=>setConfirm(true)}><Trash/>Delete my save</button>}</div><p className="settings-version">PenguCrush · Beyond the Horizon · 0.6.2</p>
   </section>;
 }
 export const isPolicyPage=page=>['privacy','privacy-policy','terms','deletion','support','licenses'].includes(page);

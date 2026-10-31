@@ -52,10 +52,10 @@ packageName
 com.pengucrush.islands
 
 versionName
-0.6.1
+0.6.2
 
 versionCode
-8
+9
 
 whatsNew
 Record completed levels on Solana with a wallet-approved transaction. This release also includes two powerful boosters, original music, richer sound effects, separate audio controls and the Leaderboard in bottom navigation.
